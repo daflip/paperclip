@@ -389,13 +389,31 @@ module Paperclip
       end
     end
 
+    def sorted_styles #:nodoc:
+      return styles unless @options[:cascading_resize]
+      a = Hash[styles.to_a.sort do |z,x|
+        z_g = z[1].geometry.split('x')
+        x_g = x[1].geometry.split('x')
+        z_so = z_g[0].to_i * z_g[1].to_i
+        x_so = x_g[0].to_i * x_g[1].to_i
+        ( z_so > x_so ) ? -1 : 1                                                                                                                                                                                                          
+      end]
+    end
+
     def post_process_styles(*style_args) #:nodoc:
-      styles.each do |name, style|
+      sorted_styles.each do |name, style|
         begin
           if style_args.empty? || style_args.include?(name)
             raise RuntimeError.new("Style #{name} has no processors defined.") if style.processors.blank?
+            #warn "Geom:: #{style.geometry.inspect}"
+            #warn "post_process_styles with #{name} #{@queued_for_write[:original].inspect}"
+            last_file = nil
             @queued_for_write[name] = style.processors.inject(@queued_for_write[:original]) do |file, processor|
-              Paperclip.processor(processor).make(file, style.processor_options.merge(:name => name), self)
+              working_file = (last_file.nil? or !@options[:cascading_resize]) ? file : last_file
+              #warn "Working on #{working_file.path} with #{name} using processor #{processor} #{style.inspect}"
+              last_file = Paperclip.processor(processor).make(working_file, style.processor_options.merge(:name => name), self)
+              #warn "resulting_path is #{last_file}"
+              last_file
             end
           end
         rescue PaperclipError => e
