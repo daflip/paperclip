@@ -132,36 +132,36 @@ module Paperclip
         (@styles.respond_to?(:call) ? @styles.call(self) : @styles).each do |name, args|
           @normalized_styles[@operation][name] = Paperclip::Style.new(name, args.dup, self)
         end
-        #unless @options[:dynamic_styles].nil?
-        #  # if we're deleting then pass all bleedin' styles 
-        #  if @operation == :delete
-        #    #[ :xxl, 1600, 1050, "1600x1050>" ]
-        #    warn  "Doing :delete ... "
-        #    @options[:dynamic_styles].each do |dynamic_style|
-        #      dyn_name, dyn_max_width, dyn_max_height, dyn_geometry = dynamic_style
-        #      warn "Adding delete style: #{dyn_name.inspect}"
-        #      @normalized_styles[@operation][dyn_name] = Paperclip::Style.new(dyn_name, dyn_geometry.dup, self)
-        #      warn "Added delete style: #{dyn_name.inspect}"
-        #    end
-        #    warn "grand j0b nbiora=="
 
-        #  elsif @operation == :write
-        #    # Otherwise only apply dynamic shtyles
-        #    if not @queued_for_write[:original].nil? #and @uploaded_file
-        #      original_geom = Geometry.from_file(@queued_for_write[:original])
-        #      #raise "original_geom.width =#{original_geom.width} and height = #{original_geom.height}"
-        #      @options[:dynamic_styles].each do |dynamic_style|
-        #        #raise "The style i got was #{dynamic_style.inspect}"
-        #        dyn_name, dyn_max_width, dyn_max_height, dyn_geometry = dynamic_style
-        #        if original_geom.width > dyn_max_width or original_geom.height > dyn_max_height
-        #          #raise "Processing #{dyn_name} from #{dyn_geometry}"
-        #          @normalized_styles[@operation][dyn_name] = Paperclip::Style.new(dyn_name, dyn_geometry.dup, self)
-        #        end
-        #      end
-        #    end
+        unless @options[:dynamic_styles].nil?
+          # if we're deleting then pass all bleedin' styles 
+          if @operation == :delete
+            #[ :xxl, 1600, 1050, "1600x1050>" ]
+            warn  "Doing :delete ... "
+            @options[:dynamic_styles].each do |dynamic_style|
+              dyn_name, dyn_max_width, dyn_max_height, dyn_geometry = dynamic_style
+              warn "Adding delete style: #{dyn_name.inspect}"
+              @normalized_styles[@operation][dyn_name] = Paperclip::Style.new(dyn_name, dyn_geometry.dup, self)
+              warn "Added delete style: #{dyn_name.inspect}"
+            end
+            warn "grand j0b nbiora=="
+          elsif @operation == :write
+            # Otherwise only apply dynamic shtyles
+            if not @queued_for_write[:original].nil? #and @uploaded_file
+              original_geom = Geometry.from_file(@queued_for_write[:original])
+              #raise "original_geom.width =#{original_geom.width} and height = #{original_geom.height}"
+              @options[:dynamic_styles].each do |dynamic_style|
+                #raise "The style i got was #{dynamic_style.inspect}"
+                dyn_name, dyn_max_width, dyn_max_height, dyn_geometry = dynamic_style
+                if original_geom.width > dyn_max_width or original_geom.height > dyn_max_height
+                  #raise "Processing #{dyn_name} from #{dyn_geometry}"
+                  @normalized_styles[@operation][dyn_name] = Paperclip::Style.new(dyn_name, dyn_geometry.dup, self)
+                end
+              end
+            end
+          end
+        end
 
-        #  end
-        #end
       end
       @normalized_styles[@operation]
     end
