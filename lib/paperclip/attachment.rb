@@ -66,7 +66,7 @@ module Paperclip
       @path                  = @path.call(self) if @path.is_a?(Proc)
       @styles                = options[:styles]
       @only_process          = options[:only_process]
-      @normalized_styles     = nil
+      @normalized_styles     = {}
       @default_url           = options[:default_url]
       @default_style         = options[:default_style]
       @storage               = options[:storage]
@@ -86,7 +86,7 @@ module Paperclip
       @queued_for_write      = {}
       @errors                = {}
       @dirty                 = false
-      @operation             = :write
+      @operation             = :unknown
       @interpolator          = (options[:interpolator] || Paperclip::Interpolations)
 
       initialize_storage
@@ -96,15 +96,74 @@ module Paperclip
       @operation
     end
 
-    def styles(related_operation = :write)
-      if @styles.respond_to?(:call) || !@normalized_styles
-        @operation = related_operation
-        @normalized_styles = ActiveSupport::OrderedHash.new
-        (@styles.respond_to?(:call) ? @styles.call(self) : @styles).each do |name, args|
-          @normalized_styles[name] = Paperclip::Style.new(name, args.dup, self)
-        end
+    #----------------------------------------------------------------------
+
+    def meta_write(meta_data)
+      meta # init
+      meta_data.each do |style,style_meta_data|
+        @meta[style.to_sym] = style_meta_data
       end
-      @normalized_styles
+      instance_write(:meta, ActiveSupport::Base64.encode64(Marshal.dump(@meta)))
+    end
+
+    # wipe out meta data (used only when reprocessing)
+    def wipe_meta!
+      @meta = {}
+    end
+
+    def meta
+      if instance.respond_to?(:"#{name}_meta") && instance_read(:meta)
+        @meta ||= Marshal.load(ActiveSupport::Base64.decode64(instance_read(:meta)))
+      end
+      @meta ||= {}
+    end
+
+    def meta_read(style, item)
+      meta
+      @meta.key?(style) ? @meta[style][item].to_i : nil
+    end
+
+    #----------------------------------------------------------------------
+
+    def styles(related_operation = :unknown)
+      @operation = related_operation
+      if @styles.respond_to?(:call) || !@normalized_styles[@operation]
+        @normalized_styles[@operation] = ActiveSupport::OrderedHash.new
+        (@styles.respond_to?(:call) ? @styles.call(self) : @styles).each do |name, args|
+          @normalized_styles[@operation][name] = Paperclip::Style.new(name, args.dup, self)
+        end
+        #unless @options[:dynamic_styles].nil?
+        #  # if we're deleting then pass all bleedin' styles 
+        #  if @operation == :delete
+        #    #[ :xxl, 1600, 1050, "1600x1050>" ]
+        #    warn  "Doing :delete ... "
+        #    @options[:dynamic_styles].each do |dynamic_style|
+        #      dyn_name, dyn_max_width, dyn_max_height, dyn_geometry = dynamic_style
+        #      warn "Adding delete style: #{dyn_name.inspect}"
+        #      @normalized_styles[@operation][dyn_name] = Paperclip::Style.new(dyn_name, dyn_geometry.dup, self)
+        #      warn "Added delete style: #{dyn_name.inspect}"
+        #    end
+        #    warn "grand j0b nbiora=="
+
+        #  elsif @operation == :write
+        #    # Otherwise only apply dynamic shtyles
+        #    if not @queued_for_write[:original].nil? #and @uploaded_file
+        #      original_geom = Geometry.from_file(@queued_for_write[:original])
+        #      #raise "original_geom.width =#{original_geom.width} and height = #{original_geom.height}"
+        #      @options[:dynamic_styles].each do |dynamic_style|
+        #        #raise "The style i got was #{dynamic_style.inspect}"
+        #        dyn_name, dyn_max_width, dyn_max_height, dyn_geometry = dynamic_style
+        #        if original_geom.width > dyn_max_width or original_geom.height > dyn_max_height
+        #          #raise "Processing #{dyn_name} from #{dyn_geometry}"
+        #          @normalized_styles[@operation][dyn_name] = Paperclip::Style.new(dyn_name, dyn_geometry.dup, self)
+        #        end
+        #      end
+        #    end
+
+        #  end
+        #end
+      end
+      @normalized_styles[@operation]
     end
 
     def processors
@@ -121,7 +180,7 @@ module Paperclip
       ensure_required_accessors!
 
       if uploaded_file.is_a?(Paperclip::Attachment)
-        uploaded_file = uploaded_file.to_file(:original)
+        @uploaded_file = uploaded_file = uploaded_file.to_file(:original)
         close_uploaded_file = uploaded_file.respond_to?(:close)
       end
 
@@ -389,9 +448,9 @@ module Paperclip
       end
     end
 
-    def sorted_styles #:nodoc:
-      return styles unless @options[:cascading_resize]
-      a = Hash[styles.to_a.sort do |z,x|
+    def dynamic_styles(operation) #:nodoc:
+      return styles(operation) unless @options[:cascading_resize]
+      a = Hash[styles(operation).to_a.sort do |z,x|
         z_g = z[1].geometry.split('x')
         x_g = x[1].geometry.split('x')
         z_so = z_g[0].to_i * z_g[1].to_i
@@ -401,7 +460,7 @@ module Paperclip
     end
 
     def post_process_styles(*style_args) #:nodoc:
-      sorted_styles.each do |name, style|
+      dynamic_styles(:write).each do |name, style|
         begin
           if style_args.empty? || style_args.include?(name)
             raise RuntimeError.new("Style #{name} has no processors defined.") if style.processors.blank?
@@ -429,7 +488,11 @@ module Paperclip
 
     def queue_existing_for_delete #:nodoc:
       return unless (file? && @preserve_files==false)
-      @queued_for_delete += [:original, *styles(:delete).keys].uniq.map do |style|
+      warn "queue_existing_for_delete : 1"
+      styles_to_delete = styles(:delete)
+      warn "queue_existing_for_delete : 2"
+      @queued_for_delete += [:original, *styles_to_delete.keys].uniq.map do |style|
+        warn "queue_existing_for_delete : 3"
         path(style) if exists?(style)
       end.compact
       instance_write(:file_name, nil)
