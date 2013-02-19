@@ -137,14 +137,15 @@ module Paperclip
           # if we're deleting then pass all bleedin' styles 
           if @operation == :delete
             #[ :xxl, 1600, 1050, "1600x1050>" ]
-            warn  "Doing :delete ... "
+            #warn  "Doing :delete ... "
+            # add dynamic style filenames so we delete every possible file
             @options[:dynamic_styles].each do |dynamic_style|
               dyn_name, dyn_max_width, dyn_max_height, dyn_geometry = dynamic_style
-              warn "Adding delete style: #{dyn_name.inspect}"
+              #warn "Adding delete style: #{dyn_name.inspect}"
               @normalized_styles[@operation][dyn_name] = Paperclip::Style.new(dyn_name, dyn_geometry.dup, self)
-              warn "Added delete style: #{dyn_name.inspect}"
+              #warn "Added delete style: #{dyn_name.inspect}"
             end
-            warn "grand j0b nbiora=="
+            #warn "grand j0b nbiora=="
           elsif @operation == :write
             # Otherwise only apply dynamic shtyles
             if not @queued_for_write[:original].nil? #and @uploaded_file
