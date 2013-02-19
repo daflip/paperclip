@@ -489,11 +489,11 @@ module Paperclip
 
     def queue_existing_for_delete #:nodoc:
       return unless (file? && @preserve_files==false)
-      warn "queue_existing_for_delete : 1"
+      #warn "queue_existing_for_delete : 1"
       styles_to_delete = styles(:delete)
-      warn "queue_existing_for_delete : 2"
+      #warn "queue_existing_for_delete : 2"
       @queued_for_delete += [:original, *styles_to_delete.keys].uniq.map do |style|
-        warn "queue_existing_for_delete : 3"
+        #warn "queue_existing_for_delete : 3"
         path(style) if exists?(style)
       end.compact
       instance_write(:file_name, nil)
