@@ -118,6 +118,11 @@ module Paperclip
       @meta ||= {}
     end
 
+    def meta_delete(style)
+      meta
+      @meta.delete(style)
+    end
+
     def meta_read(style, item)
       meta
       @meta.key?(style) ? @meta[style][item].to_i : nil
@@ -143,6 +148,8 @@ module Paperclip
               dyn_name, dyn_max_width, dyn_max_height, dyn_geometry = dynamic_style
               #warn "Adding delete style: #{dyn_name.inspect}"
               @normalized_styles[@operation][dyn_name] = Paperclip::Style.new(dyn_name, dyn_geometry.dup, self)
+              #warn "Dropping meta information for #{dyn_name.inspect}"
+              meta_delete(dyn_name)
               #warn "Added delete style: #{dyn_name.inspect}"
             end
             #warn "grand j0b nbiora=="
