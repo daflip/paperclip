@@ -73,7 +73,7 @@ module Paperclip
             directory.files.create(@fog_file.merge(
               :body   => file,
               :key    => path(style),
-              :content_type => file.content_type.to_s.strip,
+              :content_type => ((file.content_type.to_s.strip == 'image/x-ico') ? 'image/x-icon' : file.content_type.to_s.strip),
               :public => @fog_public
             ))
           rescue Excon::Errors::NotFound
