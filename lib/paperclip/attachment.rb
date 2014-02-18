@@ -472,7 +472,7 @@ module Paperclip
       # Mon 17 Feb 2014 22:46:14 
       # use jhead to remove thumbnails and rotation from jpeg images
       abs_file = File.expand_path(original_file.path)
-      if abs_file.to_s.match /(jpeg|jpg)/i
+      if abs_file.to_s.match /(jpeg|jpg)$/i
         begin
           params = %W[-q -dt -norot :source]
           Paperclip.run("jhead", params.join(" "), source: abs_file)
