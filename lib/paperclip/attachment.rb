@@ -473,7 +473,7 @@ module Paperclip
       # Mon 17 Feb 2014 22:46:14 
       # use jhead to remove thumbnails and rotation from jpeg images
       abs_file = File.expand_path(original_file.path)
-      if abs_file.to_s.match /(jpeg|jpg)$/i #and File.exists?(abs_file)
+      if abs_file.to_s.match /(jpeg|jpg)$/i and File.exists?(abs_file)
         begin
           begin
             params = %W[-q -dt -norot :source]
@@ -482,7 +482,7 @@ module Paperclip
             raise PaperclipError, "ERROR REMOVING ROTATION FROM #{abs_file}: #{$!}"
           end
         rescue
-          puts "WARNING: Error running jhead: #{$!}"
+          puts "WARNING: Error running jhead on #{abs_file}: #{$!}"
         end
       end
 
