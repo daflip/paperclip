@@ -476,7 +476,7 @@ module Paperclip
       if abs_file.to_s.match /(jpeg|jpg)$/i and File.exists?(abs_file)
         begin
           begin
-            params = %W[-q -dt -norot :source]
+            params = %W[-q -dt -autorot :source]
             Paperclip.run("jhead", params.join(" "), source: abs_file)
           rescue ArgumentError, Cocaine::CommandLineError
             raise PaperclipError, "ERROR REMOVING ROTATION FROM #{abs_file}: #{$!}"
