@@ -469,6 +469,7 @@ module Paperclip
 
     def post_process_styles(*style_args) #:nodoc:
       original_file =  @queued_for_write[:original]
+
       # Mon 17 Feb 2014 22:46:14 
       # use jhead to remove thumbnails and rotation from jpeg images
       abs_file = File.expand_path(original_file.path)
