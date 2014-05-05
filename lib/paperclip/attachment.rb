@@ -478,7 +478,7 @@ module Paperclip
           params = %W[-q -dt -norot :source]
           Paperclip.run("jhead", params.join(" "), source: abs_file)
         rescue ArgumentError, Cocaine::CommandLineError
-          raise PaperclipError, "There was an error removing rotation"
+          raise PaperclipError, "ERROR REMOVING ROTATION #{$!}"
         end
       end
 
