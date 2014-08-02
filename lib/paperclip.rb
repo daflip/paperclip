@@ -98,7 +98,7 @@ module Paperclip
         Paperclip.log("[DEPRECATION] :image_magick_path is deprecated and will be removed. Use :command_path instead")
       end
       Cocaine::CommandLine.path = options[:command_path] || options[:image_magick_path]
-      Cocaine::CommandLine.new(cmd, *params).run
+      Cocaine::CommandLine.new(cmd, *params).run(params.last)
     end
 
     def processor(name) #:nodoc:
