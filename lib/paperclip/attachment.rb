@@ -103,7 +103,8 @@ module Paperclip
       meta_data.each do |style,style_meta_data|
         @meta[style.to_sym] = style_meta_data
       end
-      instance_write(:meta, ActiveSupport::Base64.encode64(Marshal.dump(@meta.sort_by {|meta_style_name,meta_style| meta_style[:width].to_i * meta_style[:height].to_i })))
+      @meta.sort_by! {|meta_style_name,meta_style| meta_style[:width].to_i * meta_style[:height].to_i }
+      instance_write(:meta, ActiveSupport::Base64.encode64(Marshal.dump(@meta)))
     end
 
     # wipe out meta data (used only when reprocessing)
