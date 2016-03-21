@@ -98,14 +98,14 @@ module Paperclip
 
     #----------------------------------------------------------------------
 
-    #def meta_write(meta_data)
-    #  meta # init
-    #  meta_data.each do |style,style_meta_data|
-    #    @meta[style.to_sym] = style_meta_data
-    #  end
-    #  @meta = @meta.sort_by {|meta_style_name,meta_style| (meta_style[:width].to_i * meta_style[:height].to_i) }
-    #  instance_write(:meta, ActiveSupport::Base64.encode64(Marshal.dump(@meta)))
-    #end
+    def meta_write(meta_data)
+      meta # init
+      meta_data.each do |style,style_meta_data|
+        @meta[style.to_sym] = style_meta_data
+      end
+      @meta = @meta.sort_by {|meta_style_name,meta_style| 0 - (meta_style[:width].to_i * meta_style[:height].to_i) }
+      instance_write(:meta, ActiveSupport::Base64.encode64(Marshal.dump(@meta)))
+    end
 
     # wipe out meta data (used only when reprocessing)
     def wipe_meta!
