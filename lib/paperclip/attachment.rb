@@ -103,7 +103,7 @@ module Paperclip
       meta_data.each do |style,style_meta_data|
         @meta[style.to_sym] = style_meta_data
       end
-      instance_write(:meta, ActiveSupport::Base64.encode64(Marshal.dump(@meta)))
+      instance_write(:meta, ActiveSupport::Base64.encode64(Marshal.dump(@meta.sort_by {|meta_style_name,meta_style| meta_style[:width].to_i * meta_style[:height].to_i })))
     end
 
     # wipe out meta data (used only when reprocessing)
@@ -132,7 +132,7 @@ module Paperclip
 
     def styles(related_operation = :unknown)
       @operation = related_operation
-      if @styles.respond_to?(:call) || !@normalized_styles[@operation]
+      if (@styles.respond_to?(:call) || !@normalized_styles[@operation])
         @normalized_styles[@operation] = ActiveSupport::OrderedHash.new
         (@styles.respond_to?(:call) ? @styles.call(self) : @styles).each do |name, args|
           @normalized_styles[@operation][name] = Paperclip::Style.new(name, args.dup, self)
