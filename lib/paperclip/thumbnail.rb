@@ -71,6 +71,7 @@ module Paperclip
     # Performs the conversion of the +file+ into a thumbnail. Returns the Tempfile
     # that contains the new image.
     def make
+      style_name = @options[:name].to_sym
       src = @file
       original_file_ext = File.extname(src.path).downcase.gsub(/[^a-z0-9]/,"")
       ext = (@format && @format.present?) ? ".#{@format}"  : ".#{original_file_ext}"
@@ -109,10 +110,9 @@ module Paperclip
         #Rails.logger.debug "doing strip.."
         #result = result.strip 
         #Rails.logger.debug "did strip.."
-        #end
-        if @attachment and @attachment.vips_transforms
-          @attachment.vips_transforms.each do |method, params|
-            Rails.logger.info "Applying transform: #{method} with #{params}"
+        if @attachment and @attachment.vips_transforms and (@attachment.vips_transforms[style_name] || @attachment.vips_transforms[:all])
+          (@attachment.vips_transforms[ style_name ] || @attachment.vips_transforms[:all]).each do |method, params|
+            Rails.logger.info "Applying #{style_name} transform: #{method} with #{params}"
             result = result.send(method, *params)
           end
         end
