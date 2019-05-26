@@ -74,8 +74,9 @@ module Paperclip
       src = @file
       original_file_ext = File.extname(src.path).downcase.gsub(/[^a-z0-9]/,"")
       ext = (@format && @format.present?) ? ".#{@format}"  : ".#{original_file_ext}"
-      ext = '.jpg' if ext == '.jpeg'
-      ext = '.jpg' if ext == '.pdf'
+      actual_ext = ext
+      # force convert to jpg
+      ext = '.jpg' if %w(.jpeg .pdf .tiff .tif .bmp ).include?(ext)
       dst = Tempfile.new([@basename, ext])
       dst.binmode
       begin
@@ -89,7 +90,11 @@ module Paperclip
 
         # grep quality from command line
         result = result.saver(quality: $1.to_i, strip: c.include?('-strip')) if c.match(/-quality ["']?(\d+)["']?/)
-        result = result.crop(*crop_coords) if crop_coords = cropping?
+
+        # apply cropping 
+        if crop_coords = cropping?
+          result = result.crop(*crop_coords) 
+        end
 
         # if we have scaling params
 				if s = scale_params
@@ -111,8 +116,8 @@ module Paperclip
             result = result.send(method, *params)
           end
         end
-        if ext == '.pdf'
-          Rails.logger.info "Converting PDF to JPG"
+        if actual_ext != ext
+          Rails.logger.info "Converting #{ext} to .JPG"
           result = result.convert("jpg")
           result = result.colourspace(:srgb)
         end
