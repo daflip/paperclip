@@ -71,7 +71,7 @@ module Paperclip
     # Performs the conversion of the +file+ into a thumbnail. Returns the Tempfile
     # that contains the new image.
     def make
-      style_name = @options[:name].to_sym
+      style_name = @options[:name] ? @options[:name].to_sym : :original
       src = @file
       original_file_ext = File.extname(src.path).downcase.gsub(/[^a-z0-9]/,"")
       ext = (@format && @format.present?) ? ".#{@format}"  : ".#{original_file_ext}"
