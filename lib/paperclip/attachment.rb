@@ -30,6 +30,12 @@ module Paperclip
     attr_reader :name, :instance, :default_style, :convert_options, :queued_for_write, :whiny, :options, :source_file_options, :interpolator
     attr_accessor :post_processing
 
+    attr_accessor :vips_image, :vips_transforms
+
+    def transform_commands(**opts)
+      @vips_transforms = opts
+    end
+
     # Creates an Attachment object. +name+ is the name of the attachment,
     # +instance+ is the ActiveRecord object instance it's attached to, and
     # +options+ is the same as the hash passed to +has_attached_file+.
@@ -349,12 +355,21 @@ module Paperclip
       Paperclip::Interpolations
     end
 
+    def original_ext
+      s = File.extname(original_filename).downcase.gsub(/[^a-z0-9]/,"")
+      if s.blank?
+        ''
+      else
+        ".#{s}"
+      end
+    end
+
     # This method really shouldn't be called that often. It's expected use is
     # in the paperclip:refresh rake task and that's it. It will regenerate all
     # thumbnails forcefully, by reobtaining the original file and going through
     # the post-process again.
     def reprocess!(*style_args)
-      new_original = Tempfile.new("paperclip-reprocess")
+      new_original = Tempfile.new(["paperclip-reprocess", original_ext])
       new_original.binmode
       if old_original = to_file(:original)
         new_original.write( old_original.respond_to?(:get) ? old_original.get : old_original.read )
@@ -487,6 +502,7 @@ module Paperclip
       #  end
       #end
 
+      @vips_image = nil
       dynamic_styles(:write).each do |name, style|
         begin
           if style_args.empty? || style_args.include?(name)
@@ -496,6 +512,28 @@ module Paperclip
             last_file = nil
             @queued_for_write[name] = style.processors.inject(@queued_for_write[:original]) do |file, processor|
               working_file = (last_file.nil? or !@options[:cascading_resize]) ? file : last_file
+              # if this is a thumbnail processor then set the vips image
+              if processor == :thumbnail
+                unless @vips_image
+                  vip_options = ImageProcessing::Vips::Processor::Utils.select_valid_loader_options(working_file.path, { autorotate: true, dpi: 301 })
+                  if working_file.path.match(/\.pdf\Z/i)
+                    Rails.logger.info "Vips::Image.new_from_file(#{working_file.path}, #{vip_options.inspect}"
+                    vip_options[:dpi] = 300
+                  end
+                  Rails.logger.info "Vips::Image.new_from_file(#{working_file.path}, #{vip_options.inspect}"
+                  @vips_image = ::Vips::Image.new_from_file(working_file.path, vip_options)
+                  # if this isn't an RGB image
+                  colorprofile = @vips_image.interpretation
+                  Rails.logger.info "Image interpretation: #{colorprofile} #{@vips_image.inspect}"
+                  unless ([:rgb, :srgb].include? colorprofile)
+                    @vips_image = @vips_image.icc_import(embedded: true, input_profile: "/usr/share/color/icc/ghostscript/default_#{colorprofile}.icc")
+                    Rails.logger.info "Converting to :SRGB.. #{@vips_image.inspect}"
+                    @vips_image = @vips_image.colourspace(:srgb)
+                    Rails.logger.info "Complete: #{@vips_image.inspect}"
+                    Rails.logger.info @vips_image.inspect
+                  end
+                end
+              end
               #warn "Working on #{working_file.path} with #{name} using processor #{processor} #{style.inspect}"
               last_file = Paperclip.processor(processor).make(working_file, style.processor_options.merge(:name => name), self)
               #warn "resulting_path is #{last_file}"

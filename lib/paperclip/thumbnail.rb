@@ -57,43 +57,117 @@ module Paperclip
       !@convert_options.nil? && !@convert_options.empty?
     end
 
+    def cropping?
+      return false unless @attachment
+      target = @attachment.instance
+      if target.respond_to?(:cropping?) and target.cropping?(@options)
+        # params are in the order vips_crop requires;
+        [ target.crop_x.to_i, target.crop_y.to_i, target.crop_w.to_i, target.crop_h.to_i ]
+      else
+        false
+      end
+    end
+
     # Performs the conversion of the +file+ into a thumbnail. Returns the Tempfile
     # that contains the new image.
     def make
       src = @file
-      dst = Tempfile.new([@basename, @format ? ".#{@format}" : ''])
+      original_file_ext = File.extname(src.path).downcase.gsub(/[^a-z0-9]/,"")
+      ext = (@format && @format.present?) ? ".#{@format}"  : ".#{original_file_ext}"
+      ext = '.jpg' if ext == '.jpeg'
+      ext = '.jpg' if ext == '.pdf'
+      dst = Tempfile.new([@basename, ext])
       dst.binmode
-
       begin
-        parameters = []
-        parameters << source_file_options
-        parameters << ":source"
-        parameters << transformation_command
-        parameters << convert_options
-        parameters << ":dest"
+				result = ImageProcessing::Vips
+        #Rails.logger.info @attachment.inspect
+        #Rails.logger.info @attachment.vips_image.inspect
+				result = result.source(@attachment ? @attachment.vips_image : src)
+        #Rails.logger.debug "Checking convert_options"
+        c = convert_options.flatten.join(' ')
+        #Rails.logger.debug c.inspect
 
-        parameters = parameters.flatten.compact.join(" ").strip.squeeze(" ")
+        # grep quality from command line
+        result = result.saver(quality: $1.to_i, strip: c.include?('-strip')) if c.match(/-quality ["']?(\d+)["']?/)
+        result = result.crop(*crop_coords) if crop_coords = cropping?
 
-        success = Paperclip.run("convert", parameters, :source => "#{File.expand_path(src.path)}#{'[0]' unless animated?}", :dest => File.expand_path(dst.path))
-      rescue Cocaine::ExitStatusError => e
-        raise PaperclipError, "There was an error processing the thumbnail for #{@basename}" if @whiny
-      rescue Cocaine::CommandNotFoundError => e
-        raise Paperclip::CommandNotFoundError.new("Could not run the `convert` command. Please install ImageMagick.")
+        # if we have scaling params
+				if s = scale_params
+          # then resize to fit if we're cropping
+          result = if crop? or cropping?
+            result.resize_to_fit(*s) 
+          else # otherwise resize gracefully (without cropping or upsizing)
+            result.resize_to_limit(*s)  
+          end
+        end
+        #if c.include?('-strip')
+        #Rails.logger.debug "doing strip.."
+        #result = result.strip 
+        #Rails.logger.debug "did strip.."
+        #end
+        if @attachment and @attachment.vips_transforms
+          @attachment.vips_transforms.each do |method, params|
+            Rails.logger.info "Applying transform: #{method} with #{params}"
+            result = result.send(method, *params)
+          end
+        end
+        if ext == '.pdf'
+          Rails.logger.info "Converting PDF to JPG"
+          result = result.convert("jpg")
+          result = result.colourspace(:srgb)
+        end
+        #raise result.inspect
+        result.call(destination: dst.path)
+				return dst
+      rescue #Cocaine::ExitStatusError => e
+        if Rails.env.production?
+          raise PaperclipError, "There was an error processing the thumbnail for #{@basename}" if @whiny
+        else
+          raise PaperclipError, "There was an error processing the thumbnail for #{@basename}: #{$!}" 
+        end
       end
 
       dst
     end
 
+		def scale_params
+      scale, crop = @current_geometry.transformation_to(@target_geometry, crop?)
+			r = []
+      opts = {}
+      unless scale.nil? || scale.empty?
+        r << @target_geometry.width.to_i
+        r << @target_geometry.height.to_i
+        # use smartcrop if we're meant to crop but we're not explicitly cropping coordinates
+        opts[:crop] = :attention if crop? and (not cropping?)#c == '#'
+      end
+      # perceptual colorspacin'
+      #opts[:intent] = :perceptual
+      r << opts
+      #raise r.inspect
+			#	if scale.match(/\A(\d+)x(\d+)(.?)\Z/)
+			#		w,h,c = [$1,$2,$3]
+			#		r << w.to_i
+			#		r << h.to_i
+			#		r << {crop: :attention } if crop?#c == '#'
+      #    #raise r.inspect
+			#		#[trans << "-resize" << %["#{scale}"] 
+			#	else 
+			#		raise "failed to parse scale: #{scale}"
+			#	end
+			#end
+      r.any? ? r : false
+		end
+
     # Returns the command ImageMagick's +convert+ needs to transform the image
     # into the thumbnail.
-    def transformation_command
-      scale, crop = @current_geometry.transformation_to(@target_geometry, crop?)
-      trans = []
-      trans << "-coalesce" if animated?
-      trans << "-resize" << %["#{scale}"] unless scale.nil? || scale.empty?
-      trans << "-crop" << %["#{crop}"] << "+repage" if crop
-      trans
-    end
+    #def transformation_command
+    #  scale, crop = @current_geometry.transformation_to(@target_geometry, crop?)
+    #  trans = []
+    #  trans << "-coalesce" if animated?
+    #  trans << "-resize" << %["#{scale}"] unless scale.nil? || scale.empty?
+    #  trans << "-crop" << %["#{crop}"] << "+repage" if crop
+    #  trans
+    #end
 
     protected
 

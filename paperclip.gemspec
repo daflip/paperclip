@@ -28,6 +28,8 @@ spec = Gem::Specification.new do |s|
   s.add_dependency 'activesupport', '>=2.3.2'
   s.add_dependency 'cocaine', '>=0.0.2'
   s.add_dependency 'mime-types'
+  s.add_dependency 'vips', '~> 8.7.0'
+  s.add_dependency 'image_processing', '~>1.8.0'
   s.add_development_dependency 'shoulda'
   s.add_development_dependency 'appraisal'
   s.add_development_dependency 'mocha'
