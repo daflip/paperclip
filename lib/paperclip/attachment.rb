@@ -526,7 +526,13 @@ module Paperclip
                   colorprofile = @vips_image.interpretation
                   Rails.logger.info "Image interpretation: #{colorprofile} #{@vips_image.inspect}"
                   unless ([:rgb, :srgb].include? colorprofile)
-                    @vips_image = @vips_image.icc_import(embedded: true, input_profile: "/usr/share/color/icc/ghostscript/default_#{colorprofile}.icc")
+                    input_profile =  if colorprofile == :cmyk
+                      File.join(Rails.root, "db", "colorprofiles", "#{colorprofile}.icm")
+                    else
+                      "/usr/share/color/icc/ghostscript/default_#{colorprofile}.icc"
+                    end
+                    Rails.logger.info "Importing icc profile with fallback #{input_profile}"
+                    @vips_image = @vips_image.icc_import(embedded: true, input_profile: input_profile)
                     Rails.logger.info "Converting to :SRGB.. #{@vips_image.inspect}"
                     @vips_image = @vips_image.colourspace(:srgb)
                     Rails.logger.info "Complete: #{@vips_image.inspect}"
