@@ -465,14 +465,11 @@ module Paperclip
 
     def post_process(*style_args) #:nodoc:
       return if @queued_for_write[:original].nil?
-      return unless @post_processing
       instance.run_paperclip_callbacks(:post_process) do
         instance.run_paperclip_callbacks(:"#{name}_post_process") do
           post_process_styles(*style_args)
         end
       end
-      # prevent double post processing by flagging post_processing as false
-      @post_processing       = false
     end
 
     def dynamic_styles(operation) #:nodoc:
