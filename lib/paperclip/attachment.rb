@@ -470,6 +470,8 @@ module Paperclip
           post_process_styles(*style_args)
         end
       end
+      # prevent double post processing by flagging post_processing as false
+      @post_processing       = false
     end
 
     def dynamic_styles(operation) #:nodoc:
@@ -526,13 +528,13 @@ module Paperclip
                   colorprofile = @vips_image.interpretation
                   Rails.logger.info "Image interpretation: #{colorprofile} #{@vips_image.inspect}"
                   unless ([:rgb, :srgb].include? colorprofile)
-                    input_profile =  if colorprofile == :cmyk
-                      File.join(Rails.root, "db", "colorprofiles", "#{colorprofile}.icm")
-                    else
-                      "/usr/share/color/icc/ghostscript/default_#{colorprofile}.icc"
-                    end
-                    Rails.logger.info "Importing icc profile with fallback #{input_profile}"
-                    @vips_image = @vips_image.icc_import(embedded: true, input_profile: input_profile)
+                    #input_profile =  if colorprofile == :cmyk
+                    #File.join(Rails.root, "db", "colorprofiles", "#{colorprofile}.icm")
+                    #else
+                    #"/usr/share/color/icc/ghostscript/default_#{colorprofile}.icc"
+                    #end
+                    #Rails.logger.info "Importing icc profile with fallback #{input_profile}"
+                    #@vips_image = @vips_image.icc_import(embedded: true, input_profile: input_profile)
                     Rails.logger.info "Converting to :SRGB.. #{@vips_image.inspect}"
                     @vips_image = @vips_image.colourspace(:srgb)
                     Rails.logger.info "Complete: #{@vips_image.inspect}"
