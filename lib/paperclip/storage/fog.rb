@@ -117,7 +117,8 @@ module Paperclip
 
       def public_url(style = default_style)
         if @fog_host
-          host = (@fog_host =~ /%d/) ? @fog_host % (path(style).hash % 4) : @fog_host
+          # in the case of round-robin cdn, urls are 'instance-sticky' i.e. all styles will use the same cdn host
+          host = (@fog_host =~ /%d/) ? @fog_host % ( (Digest::MD5.hexdigest(self.instance.id.to_s).to_i(16) % 3 + 1) ) : @fog_host
           "#{host}/#{path(style)}"
         else
           directory.files.new(:key => path(style)).public_url
