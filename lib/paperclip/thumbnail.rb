@@ -68,6 +68,33 @@ module Paperclip
       end
     end
 
+    # using image magick
+    def old_make
+      src = @file
+      dst = Tempfile.new([@basename, @format ? ".#{@format}" : ''])
+      dst.binmode
+      begin
+        parameters = []
+        parameters << source_file_options
+        parameters << ":source"
+        parameters << transformation_command
+        parameters << convert_options
+        parameters << ":dest"
+        parameters = parameters.flatten.compact.join(" ").strip.squeeze(" ")
+        #Rails.logger.debug("convert #{parameters} source: #{File.expand_path(src.path)}#{'[0]' unless animated?} dest => #{File.expand_path(dst.path)}")
+        success = Paperclip.run("convert", parameters, :source => "#{File.expand_path(src.path)}#{'[0]' unless animated?}", :dest => File.expand_path(dst.path))
+      rescue Cocaine::ExitStatusError => e
+        raise PaperclipError, "There was an error processing the thumbnail for #{@basename}" if @whiny
+      rescue Cocaine::CommandNotFoundError => e
+        raise Paperclip::CommandNotFoundError.new("Could not run the `convert` command. Please install ImageMagick.")
+      end
+      dst
+    end
+
+    def preserve_animation?
+      @attachment.instance.respond_to?(:animated?) and @attachment.instance.try(:animated?) 
+    end
+
     # Performs the conversion of the +file+ into a thumbnail. Returns the Tempfile
     # that contains the new image.
     def make
@@ -78,9 +105,15 @@ module Paperclip
       actual_ext = ext
       # force convert to jpg
       ext = '.jpg' if %w(.jpeg .pdf .tiff .tif .bmp ).include?(ext)
-      dst = Tempfile.new([@basename, ext])
-      dst.binmode
       begin
+        # if this is a gif and we're meant to retain animation
+        if ext == '.gif' and preserve_animation?
+          @format = 'gif'
+          return old_make 
+        end
+        dst = Tempfile.new([@basename, ext])
+        dst.binmode
+
 				result = ImageProcessing::Vips
         #Rails.logger.info @attachment.inspect
         #Rails.logger.info @attachment.vips_image.inspect
@@ -165,14 +198,24 @@ module Paperclip
 
     # Returns the command ImageMagick's +convert+ needs to transform the image
     # into the thumbnail.
-    #def transformation_command
-    #  scale, crop = @current_geometry.transformation_to(@target_geometry, crop?)
-    #  trans = []
-    #  trans << "-coalesce" if animated?
-    #  trans << "-resize" << %["#{scale}"] unless scale.nil? || scale.empty?
-    #  trans << "-crop" << %["#{crop}"] << "+repage" if crop
-    #  trans
-    #end
+    def transformation_command
+      scale, crop = @current_geometry.transformation_to(@target_geometry, crop?)
+      trans = []
+      trans << "-coalesce" if animated?
+
+      if animated? and preserve_animation?
+        # if we're scaling, then we need to do some optimizations due to more colors being introduced when scaling
+        unless scale.nil? || scale.empty?
+          trans << "-scale" << %["#{scale}"] 
+          trans << '-fuzz 2% +dither -remap :source +dither -layers Optimize '
+        end
+      else
+        trans << "-resize" << %["#{scale}"] unless scale.nil? || scale.empty?
+      end
+
+      trans << "-crop" << %["#{crop}"] << "+repage" if crop
+      trans
+    end
 
     protected
 
