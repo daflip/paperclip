@@ -77,12 +77,11 @@ module Paperclip
         parameters = []
         parameters << source_file_options
         parameters << ":source"
-        parameters << transformation_command
-        parameters << convert_options
-        parameters << ":dest"
+        #parameters << transformation_command
+        #parameters << convert_options
+        parameters << "-o :dest"
         parameters = parameters.flatten.compact.join(" ").strip.squeeze(" ")
-        #Rails.logger.debug("convert #{parameters} source: #{File.expand_path(src.path)}#{'[0]' unless animated?} dest => #{File.expand_path(dst.path)}")
-        success = Paperclip.run("convert", parameters, :source => "#{File.expand_path(src.path)}#{'[0]' unless animated?}", :dest => File.expand_path(dst.path))
+        success = Paperclip.run("gifsicle", parameters, :source => "#{File.expand_path(src.path)}#{'[0]' unless animated?}", :dest => File.expand_path(dst.path))
       rescue Cocaine::ExitStatusError => e
         raise PaperclipError, "There was an error processing the thumbnail for #{@basename}" if @whiny
       rescue Cocaine::CommandNotFoundError => e
@@ -114,13 +113,9 @@ module Paperclip
         dst = Tempfile.new([@basename, ext])
         dst.binmode
 
-				result = ImageProcessing::Vips
-        #Rails.logger.info @attachment.inspect
-        #Rails.logger.info @attachment.vips_image.inspect
-				result = result.source(@attachment ? @attachment.vips_image : src)
-        #Rails.logger.debug "Checking convert_options"
+        result = ImageProcessing::Vips
+        result = result.source(@attachment ? @attachment.vips_image : src)
         c = convert_options.flatten.join(' ')
-        #Rails.logger.debug c.inspect
 
         # grep quality from command line
         result = result.saver(quality: $1.to_i, strip: c.include?('-strip')) if c.match(/-quality ["']?(\d+)["']?/)
@@ -131,7 +126,7 @@ module Paperclip
         end
 
         # if we have scaling params
-				if s = scale_params
+        if s = scale_params
           # then resize to fit if we're cropping
           result = if crop? or cropping?
             result.resize_to_fit(*s) 
@@ -139,10 +134,6 @@ module Paperclip
             result.resize_to_limit(*s)  
           end
         end
-        #if c.include?('-strip')
-        #Rails.logger.debug "doing strip.."
-        #result = result.strip 
-        #Rails.logger.debug "did strip.."
         if @attachment and @attachment.vips_transforms and (@attachment.vips_transforms[style_name] || @attachment.vips_transforms[:all])
           (@attachment.vips_transforms[ style_name ] || @attachment.vips_transforms[:all]).each do |method, params|
             Rails.logger.info "Applying #{style_name} transform: #{method} with #{params}"
@@ -156,7 +147,7 @@ module Paperclip
         end
         #raise result.inspect
         result.call(destination: dst.path)
-				return dst
+        return dst
       rescue #Cocaine::ExitStatusError => e
         if Rails.env.production?
           raise PaperclipError, "There was an error processing the thumbnail for #{@basename}" if @whiny
@@ -168,9 +159,9 @@ module Paperclip
       dst
     end
 
-		def scale_params
+    def scale_params
       scale, crop = @current_geometry.transformation_to(@target_geometry, crop?)
-			r = []
+      r = []
       opts = {}
       unless scale.nil? || scale.empty?
         r << @target_geometry.width.to_i
@@ -182,38 +173,40 @@ module Paperclip
       #opts[:intent] = :perceptual
       r << opts
       #raise r.inspect
-			#	if scale.match(/\A(\d+)x(\d+)(.?)\Z/)
-			#		w,h,c = [$1,$2,$3]
-			#		r << w.to_i
-			#		r << h.to_i
-			#		r << {crop: :attention } if crop?#c == '#'
+      # if scale.match(/\A(\d+)x(\d+)(.?)\Z/)
+      #   w,h,c = [$1,$2,$3]
+      #   r << w.to_i
+      #   r << h.to_i
+      #   r << {crop: :attention } if crop?#c == '#'
       #    #raise r.inspect
-			#		#[trans << "-resize" << %["#{scale}"] 
-			#	else 
-			#		raise "failed to parse scale: #{scale}"
-			#	end
-			#end
+      #   #[trans << "-resize" << %["#{scale}"] 
+      # else 
+      #   raise "failed to parse scale: #{scale}"
+      # end
+      #end
       r.any? ? r : false
-		end
+    end
 
     # Returns the command ImageMagick's +convert+ needs to transform the image
     # into the thumbnail.
     def transformation_command
       scale, crop = @current_geometry.transformation_to(@target_geometry, crop?)
       trans = []
-      trans << "-coalesce" if animated?
+      #trans << "-coalesce" if animated?
 
       if animated? and preserve_animation?
         # if we're scaling, then we need to do some optimizations due to more colors being introduced when scaling
         unless scale.nil? || scale.empty?
-          trans << "-scale" << %["#{scale}"] 
-          trans << '-fuzz 2% +dither -remap :source +dither -layers Optimize '
+          trans << "--resize-colors 64"
+          trans << "-resize" << %["#{scale}"] 
+          #trans << '-fuzz 2% +dither -remap :source +dither -layers Optimize '
         end
       else
         trans << "-resize" << %["#{scale}"] unless scale.nil? || scale.empty?
       end
 
       trans << "-crop" << %["#{crop}"] << "+repage" if crop
+      Rails.logger.debug "transformation command: #{trans.join(' ')}"
       trans
     end
 
