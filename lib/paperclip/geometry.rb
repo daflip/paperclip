@@ -97,7 +97,54 @@ module Paperclip
       [ scale_geometry, crop_geometry ]
     end
 
+    def gifsicle_scaling dst, ratio
+      if ratio.horizontal? || ratio.square?
+        [ ("%dx%d" % [dst.width, dst.height]), ratio.width ]
+      else
+        [ ("%dx%d" % [dst.width, dst.height]), ratio.height ]
+      end
+    end
+
+    #gifsicle -O2 --crop #{crop} --resize #{scale} #{test_thumb} -o /tmp/gif.gif
+    def gifsicle_transformation_to dst, crop = false
+      if crop
+        ratio = Geometry.new( dst.width / self.width, dst.height / self.height )
+        scale_geometry, scale = gifsicle_scaling(dst, ratio)
+        crop_geometry         = gifsicle_cropping(dst, ratio, scale)
+      else
+        scale_geometry        = dst.to_s
+      end
+      [ scale_geometry, crop_geometry ]
+    end
+
     private
+
+    # ported from Wordpress image_resize_dimensions
+    def gifsicle_cropping dst, ratio, scale
+      #if ratio.horizontal? || ratio.square?
+      orig_h = height
+      orig_w = width
+      #puts [orig_w, orig_h].join('x')
+      aspect_ratio = orig_w.to_f / orig_h.to_f
+      new_w        = [dst.width, orig_w].min
+      new_h        = [dst.height, orig_h].min
+      new_w = ( new_h * aspect_ratio ).ceil if new_w.zero?
+      new_h = [new_w / aspect_ratio].min if new_h.zero?
+      #puts [new_w, new_h].join('x')
+      size_ratio = [ new_w.to_f / orig_w.to_f, new_h.to_f / orig_h.to_f ].max
+      #puts "size_ratio: #{size_ratio.to_f}"
+      crop_h = ( new_h.to_f / size_ratio ).ceil
+      crop_w = ( new_w.to_f / size_ratio ).ceil
+      #puts "CORP: #{[crop_w, crop_h].join('x')}"
+      s_x = ( ( orig_w - crop_w ) / 2 ).floor
+      s_y = ( ( orig_h - crop_h ) / 2 ).floor
+      #// int dst_x, int dst_y, int src_x, int src_y, int dst_w, int dst_h, int src_w, int src_h
+      r = { dst_x: 0, dst_y: 0, src_x: s_x, src_y: s_y, dst_w: new_w, dst_h: new_h, src_w: crop_w, src_h: crop_h }
+      Rails.logger.debug "gifsicle_cropping: #{r.inspect}"
+      #"%d,%d+%dx%d" % [  r[:src_x], r[:src_y], (r[:src_w] - r[:src_x]), (r[:src_h] - r[:src_y]) ]
+      "%d,%d+%dx%d" % [  r[:src_x], r[:src_y], r[:src_w] , r[:src_h] ]
+    end
+
 
     def scaling dst, ratio
       if ratio.horizontal? || ratio.square?

@@ -68,21 +68,23 @@ module Paperclip
       end
     end
 
-    # using image magick
-    def old_make
+    # gifsicle adapted make, especially for resizing GIF images
+    def gifsicle_make
       src = @file
       dst = Tempfile.new([@basename, @format ? ".#{@format}" : ''])
       dst.binmode
       begin
-        parameters = []
-        parameters << source_file_options
-        parameters << ":source"
-        #parameters << transformation_command
+        parameters = ['-O2', '--conserve-memory']
+        #parameters << source_file_options
+        parameters << gifsicle_transformation_command
+        parameters << ':source'
         #parameters << convert_options
-        parameters << "-o :dest"
+        parameters << '-o :dest'
         parameters = parameters.flatten.compact.join(" ").strip.squeeze(" ")
-        success = Paperclip.run("gifsicle", parameters, :source => "#{File.expand_path(src.path)}#{'[0]' unless animated?}", :dest => File.expand_path(dst.path))
+        #Rails.logger.debug "#{@attachment.instance.id} gifsicle: #{src.path} -> #{parameters.inspect} for -> #{dst.path}"
+        success = Paperclip.run("gifsicle", parameters, source: "#{File.expand_path(src.path)}#{'[0]' unless animated?}", dest: File.expand_path(dst.path))
       rescue Cocaine::ExitStatusError => e
+        Rails.logger.error "Error processing #{@basename}: #{$!}"
         raise PaperclipError, "There was an error processing the thumbnail for #{@basename}" if @whiny
       rescue Cocaine::CommandNotFoundError => e
         raise Paperclip::CommandNotFoundError.new("Could not run the `convert` command. Please install ImageMagick.")
@@ -108,7 +110,7 @@ module Paperclip
         # if this is a gif and we're meant to retain animation
         if ext == '.gif' and preserve_animation?
           @format = 'gif'
-          return old_make 
+          return gifsicle_make 
         end
         dst = Tempfile.new([@basename, ext])
         dst.binmode
@@ -187,25 +189,42 @@ module Paperclip
       r.any? ? r : false
     end
 
-    # Returns the command ImageMagick's +convert+ needs to transform the image
+    # imagemagick based crop to gifsicle crop format
+    # $src_x,
+    # $src_y,
+    # $src_w - $src_x,
+    # $src_h - $src_y
+    #def gifsicle_crop(image_magick_crop_string)
+    #  Rails.logger.debug "transforming imagemagick crop: #{image_magick_crop_string}"
+    #  return image_magick_crop_string
+    #  if r = image_magick_crop_string.match(/\A(\d+)x(\d+)\+(\d+)\+(\d+)\Z/)
+    #    # w-h-y-x -> x,y+WxH
+    #    "%d,%d+%dx%d" % [ r[4], r[3], r[1], r[2] ]
+    #  else
+    #    raise "unable to convert imagemagick crop string!"
+    #  end
+    #end
+
+    # Returns the command GIFSICLE +convert+ needs to transform the image
     # into the thumbnail.
-    def transformation_command
-      scale, crop = @current_geometry.transformation_to(@target_geometry, crop?)
+    def gifsicle_transformation_command
+      scale, crop = @current_geometry.gifsicle_transformation_to(@target_geometry, crop?)
+      is_animation = (animated? and preserve_animation?)
       trans = []
+
+      trans << "--crop" << %["#{crop}"] if crop #and is_animation
       #trans << "-coalesce" if animated?
-
-      if animated? and preserve_animation?
-        # if we're scaling, then we need to do some optimizations due to more colors being introduced when scaling
-        unless scale.nil? || scale.empty?
-          trans << "--resize-colors 64"
-          trans << "-resize" << %["#{scale}"] 
-          #trans << '-fuzz 2% +dither -remap :source +dither -layers Optimize '
-        end
-      else
-        trans << "-resize" << %["#{scale}"] unless scale.nil? || scale.empty?
+      if scale.present?
+        #Rails.logger.debug "scaling: #{scale.inspect} dst: #{@target_geometry.to_s}"
+        thumb_scale = scale.to_s.gsub(/\W/, "")
+        #thumb_scale = @target_geometry.to_s.gsub(/\W/, "")
+        # gifsicle params:
+        trans << "--resize-colors 64"
+        # if we're cropping we're resizing the image
+        # otherwise we're just fitting within the specified size..
+        trans << "--#{crop ? 'resize' : 'resize-fit' }" << %["#{thumb_scale}"] 
       end
-
-      trans << "-crop" << %["#{crop}"] << "+repage" if crop
+      #trans << "-crop" << %["#{crop}"] << "+repage" if crop and (not is_animation)
       Rails.logger.debug "transformation command: #{trans.join(' ')}"
       trans
     end
