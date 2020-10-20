@@ -96,6 +96,14 @@ module Paperclip
       @attachment.instance.respond_to?(:animated?) and @attachment.instance.try(:animated?) 
     end
 
+    def thumbnail_transformations(style_name)
+      if @attachment and @attachment.vips_transforms and (@attachment.vips_transforms[style_name] || @attachment.vips_transforms[:all])
+        @attachment.vips_transforms[ style_name ] || @attachment.vips_transforms[:all]
+      else
+        {}
+      end
+    end
+
     # Performs the conversion of the +file+ into a thumbnail. Returns the Tempfile
     # that contains the new image.
     def make
@@ -136,12 +144,13 @@ module Paperclip
             result.resize_to_limit(*s)  
           end
         end
-        if @attachment and @attachment.vips_transforms and (@attachment.vips_transforms[style_name] || @attachment.vips_transforms[:all])
-          (@attachment.vips_transforms[ style_name ] || @attachment.vips_transforms[:all]).each do |method, params|
-            Rails.logger.info "Applying #{style_name} transform: #{method} with #{params}"
-            result = result.send(method, *params)
-          end
+
+        # custom on the fly transforms ..
+        thumbnail_transformations(style_name).each do |method, params|
+          Rails.logger.info "Applying #{style_name} transform: #{method} with #{params}"
+          result = result.send(method, *params)
         end
+
         if actual_ext != ext
           Rails.logger.info "Converting #{ext} to .JPG"
           result = result.convert("jpg")
@@ -205,6 +214,16 @@ module Paperclip
     #  end
     #end
 
+    def gifscile_thumbnail_transformations(style_name)
+      trans = []
+      thumb_transforms = thumbnail_transformations(style_name)
+      # rotation only for now..
+      if degrees = thumb_transforms[:rotate]
+        trans << "--rotate-#{degrees == 90 ? 90 : 270}"
+      end
+      trans
+    end
+
     # Returns the command GIFSICLE +convert+ needs to transform the image
     # into the thumbnail.
     def gifsicle_transformation_command
@@ -223,6 +242,8 @@ module Paperclip
         # otherwise we're just fitting within the specified size..
         trans << "--#{crop ? 'resize' : 'resize-fit' }" << %["#{thumb_scale}"] 
       end
+      trans += gifscile_thumbnail_transformations(@options[:name])
+
       #trans << "-crop" << %["#{crop}"] << "+repage" if crop and (not is_animation)
       Rails.logger.debug "transformation command: #{trans.join(' ')}"
       trans
