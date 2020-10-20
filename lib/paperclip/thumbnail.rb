@@ -209,10 +209,9 @@ module Paperclip
     # into the thumbnail.
     def gifsicle_transformation_command
       scale, crop = @current_geometry.gifsicle_transformation_to(@target_geometry, crop?)
-      is_animation = (animated? and preserve_animation?)
       trans = []
 
-      trans << "--crop" << %["#{crop}"] if crop #and is_animation
+      trans << "--crop" << %["#{crop}"] if crop 
       #trans << "-coalesce" if animated?
       if scale.present?
         #Rails.logger.debug "scaling: #{scale.inspect} dst: #{@target_geometry.to_s}"
