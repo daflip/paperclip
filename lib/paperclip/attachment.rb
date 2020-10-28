@@ -113,8 +113,6 @@ module Paperclip
         else
           0 - (meta_style[:width].to_i + meta_style[:height].to_i)
         end
-        #r = 0
-        #( r + meta_attrs[:width].to_i + meta_attrs[:height].to_i )
       end]
     end
 
