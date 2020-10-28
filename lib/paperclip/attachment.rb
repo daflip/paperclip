@@ -104,12 +104,26 @@ module Paperclip
 
     #----------------------------------------------------------------------
 
+    # get styles sorted by size from largest to smallest
+    # :original if it exists is always first
+    def weighted_styles(input)
+      Hash[input.sort_by do |meta_style_name,meta_style| 
+        r = if meta_style_name == :original 
+          -9999999999999
+        else
+          0 - (meta_style[:width].to_i + meta_style[:height].to_i)
+        end
+        #r = 0
+        #( r + meta_attrs[:width].to_i + meta_attrs[:height].to_i )
+      end]
+    end
+
     def meta_write(meta_data)
       meta # init
       meta_data.each do |style,style_meta_data|
         @meta[style.to_sym] = style_meta_data
       end
-      @meta = Hash[@meta.sort_by do |meta_style_name,meta_style| 0 - (meta_style[:width].to_i * meta_style[:height].to_i) end]
+      @meta = weighted_styles(@meta)
       instance_write(:meta, ActiveSupport::Base64.encode64(Marshal.dump(@meta)))
     end
 
