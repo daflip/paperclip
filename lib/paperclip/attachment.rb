@@ -515,7 +515,7 @@ module Paperclip
               # if this is a thumbnail processor then set the vips image
               if processor == :thumbnail
                 unless @vips_image
-                  vip_options = ImageProcessing::Vips::Processor::Utils.select_valid_loader_options(working_file.path, { autorotate: true, dpi: 301 })
+                  vip_options = ImageProcessing::Vips::Processor::Utils.select_valid_loader_options(working_file.path, { dpi: 301 })
                   if working_file.path.match(/\.pdf\Z/i)
                     Rails.logger.info "Vips::Image.new_from_file(#{working_file.path}, #{vip_options.inspect}"
                     vip_options[:dpi] = 300
