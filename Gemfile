@@ -3,7 +3,7 @@ source "http://rubygems.org"
 gem "activerecord", :require => "active_record"
 gem "appraisal"
 gem "vips"
-gem "image_processing", '~>1.8.0'
+gem "image_processing"
 gem "aruba"
 gem "aws-s3", :require => "aws/s3"
 gem "bundler"
