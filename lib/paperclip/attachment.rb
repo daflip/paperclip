@@ -516,13 +516,16 @@ module Paperclip
               # if this is a thumbnail processor then set the vips image
               if processor == :thumbnail
                 unless @vips_image
-                  vip_options = ImageProcessing::Vips::Processor::Utils.select_valid_loader_options(working_file.path, { dpi: 301 })
+                  vips_options = ImageProcessing::Vips::Processor::Utils.select_valid_loader_options(working_file.path, { dpi: 301 })
                   if working_file.path.match(/\.pdf\Z/i)
-                    Rails.logger.info "Vips::Image.new_from_file(#{working_file.path}, #{vip_options.inspect}"
-                    vip_options[:dpi] = 300
+                    Rails.logger.info "Vips::Image.new_from_file(#{working_file.path}, #{vips_options.inspect}"
+                    vips_options[:dpi] = 300
+                  elsif working_file.path.match(/\.jpe?g\Z/i)
+                    #vips_options[:auto_rotate] = true 
+                    vips_options[:autorotate] = true 
                   end
-                  Rails.logger.info "Vips::Image.new_from_file(#{working_file.path}, #{vip_options.inspect}"
-                  @vips_image = ::Vips::Image.new_from_file(working_file.path, vip_options)
+                  Rails.logger.info "Vips::Image.new_from_file(#{working_file.path}, #{vips_options.inspect}"
+                  @vips_image = ::Vips::Image.new_from_file(working_file.path, vips_options)
                   # if this isn't an RGB image
                   colorprofile = @vips_image.interpretation
                   Rails.logger.info "Image interpretation: #{colorprofile} #{@vips_image.inspect}"
