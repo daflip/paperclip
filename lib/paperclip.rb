@@ -425,6 +425,8 @@ module Paperclip
       each_attachment do |name, attachment|
         attachment.send(:save)
       end
+      Paperclip.log("Saved attachments.")
+      true
     end
 
     def destroy_attached_files
@@ -432,6 +434,7 @@ module Paperclip
       each_attachment do |name, attachment|
         attachment.send(:flush_deletes)
       end
+      true
     end
 
     def prepare_for_destroy
@@ -439,6 +442,7 @@ module Paperclip
       each_attachment do |name, attachment|
         attachment.send(:queue_existing_for_delete)
       end
+      true
     end
 
   end

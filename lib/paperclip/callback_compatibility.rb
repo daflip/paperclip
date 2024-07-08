@@ -35,7 +35,7 @@ module Paperclip
 
       module Defining
         def define_paperclip_callbacks(*callbacks)
-          define_callbacks *[callbacks, {:terminator => "result == false"}].flatten
+          define_callbacks *[callbacks, { terminator: ->(target, result_lambda) { result_lambda.call == false } } ].flatten
           callbacks.each do |callback|
             eval <<-end_callbacks
               def before_#{callback}(*args, &blk)
@@ -50,8 +50,8 @@ module Paperclip
       end
 
       module Running
-        def run_paperclip_callbacks(callback, opts = nil, &block)
-          run_callbacks(callback, opts, &block)
+        def run_paperclip_callbacks(callback, &block)
+          run_callbacks(callback, &block)
         end
       end
 

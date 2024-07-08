@@ -77,7 +77,7 @@ class IntegrationTest < Test::Unit::TestCase
   context "Attachment" do
     setup do
       @thumb_path = "./test/../public/system/avatars/1/thumb/5k.png"
-      File.delete(@thumb_path) if File.exists?(@thumb_path)
+      File.delete(@thumb_path) if File.exist?(@thumb_path)
       rebuild_model :styles => { :thumb => "50x50#" }
       @dummy = Dummy.new
       @file = File.new(File.join(File.dirname(__FILE__),
@@ -92,14 +92,14 @@ class IntegrationTest < Test::Unit::TestCase
       @dummy.avatar.post_processing = false
       @dummy.avatar = @file
       assert @dummy.save
-      assert !File.exists?(@thumb_path)
+      assert !File.exist?(@thumb_path)
     end
 
     should "create the thumbnails upon saving when post_processing is enabled" do
       @dummy.avatar.post_processing = true
       @dummy.avatar = @file
       assert @dummy.save
-      assert File.exists?(@thumb_path)
+      assert File.exist?(@thumb_path)
     end
   end
 
@@ -107,8 +107,8 @@ class IntegrationTest < Test::Unit::TestCase
     setup do
       @thumb_small_path = "./test/../public/system/avatars/1/thumb_small/5k.png"
       @thumb_large_path = "./test/../public/system/avatars/1/thumb_large/5k.png"
-      File.delete(@thumb_small_path) if File.exists?(@thumb_small_path)
-      File.delete(@thumb_large_path) if File.exists?(@thumb_large_path)
+      File.delete(@thumb_small_path) if File.exist?(@thumb_small_path)
+      File.delete(@thumb_large_path) if File.exist?(@thumb_large_path)
       rebuild_model :styles => { :thumb_small => "50x50#", :thumb_large => "60x60#" }
       @dummy = Dummy.new
       @file = File.new(File.join(File.dirname(__FILE__),
@@ -124,25 +124,25 @@ class IntegrationTest < Test::Unit::TestCase
     teardown { @file.close }
 
     should "allow us to create all thumbnails in one go" do
-      assert !File.exists?(@thumb_small_path)
-      assert !File.exists?(@thumb_large_path)
+      assert !File.exist?(@thumb_small_path)
+      assert !File.exist?(@thumb_large_path)
 
       @dummy.avatar.reprocess!
 
-      assert File.exists?(@thumb_small_path)
-      assert File.exists?(@thumb_large_path)
+      assert File.exist?(@thumb_small_path)
+      assert File.exist?(@thumb_large_path)
     end
 
     should "allow us to selectively create each thumbnail" do
-      assert !File.exists?(@thumb_small_path)
-      assert !File.exists?(@thumb_large_path)
+      assert !File.exist?(@thumb_small_path)
+      assert !File.exist?(@thumb_large_path)
 
       @dummy.avatar.reprocess! :thumb_small
-      assert File.exists?(@thumb_small_path)
-      assert !File.exists?(@thumb_large_path)
+      assert File.exist?(@thumb_small_path)
+      assert !File.exist?(@thumb_large_path)
 
       @dummy.avatar.reprocess! :thumb_large
-      assert File.exists?(@thumb_large_path)
+      assert File.exist?(@thumb_large_path)
     end
   end
 
@@ -184,7 +184,7 @@ class IntegrationTest < Test::Unit::TestCase
       end
 
       should "have a large file in the right place" do
-        assert File.exists?(@dummy.avatar.path(:large))
+        assert File.exist?(@dummy.avatar.path(:large))
       end
 
       context "and deleted" do
@@ -194,12 +194,12 @@ class IntegrationTest < Test::Unit::TestCase
         end
 
         should "not have a large file in the right place anymore" do
-          assert ! File.exists?(@saved_path)
+          assert ! File.exist?(@saved_path)
         end
 
         should "not have its next two parent directories" do
-          assert ! File.exists?(File.dirname(@saved_path))
-          assert ! File.exists?(File.dirname(File.dirname(@saved_path)))
+          assert ! File.exist?(File.dirname(@saved_path))
+          assert ! File.exist?(File.dirname(File.dirname(@saved_path)))
         end
 
         before_should "not die if an unexpected SystemCallError happens" do
@@ -357,7 +357,7 @@ class IntegrationTest < Test::Unit::TestCase
       assert @dummy.save
 
       saved_paths.each do |p|
-        assert File.exists?(p)
+        assert File.exist?(p)
       end
 
       @dummy.avatar.clear
@@ -366,7 +366,7 @@ class IntegrationTest < Test::Unit::TestCase
       assert @dummy.save
 
       saved_paths.each do |p|
-        assert ! File.exists?(p)
+        assert ! File.exist?(p)
       end
 
       @d2 = Dummy.find(@dummy.id)
@@ -387,7 +387,7 @@ class IntegrationTest < Test::Unit::TestCase
       assert @d2.save
 
       saved_paths.each do |p|
-        assert ! File.exists?(p)
+        assert ! File.exist?(p)
       end
     end
 

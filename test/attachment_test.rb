@@ -848,7 +848,7 @@ class AttachmentTest < Test::Unit::TestCase
               [:large, :medium, :small].each do |style|
                 io = @attachment.to_file(style)
                 # p "in commit to disk test, io is #{io.inspect} and @instance.id is #{@instance.id}"
-                assert File.exists?(io.path)
+                assert File.exist?(io.path)
                 assert ! io.is_a?(::Tempfile)
                 io.close
               end
@@ -886,7 +886,7 @@ class AttachmentTest < Test::Unit::TestCase
                 @attachment.expects(:instance_write).with(:updated_at, nil)
                 @attachment.assign nil
                 @attachment.save
-                @existing_names.each{|f| assert ! File.exists?(f) }
+                @existing_names.each{|f| assert ! File.exist?(f) }
               end
 
               should "delete the files when you call #clear and #save" do
@@ -896,7 +896,7 @@ class AttachmentTest < Test::Unit::TestCase
                 @attachment.expects(:instance_write).with(:updated_at, nil)
                 @attachment.clear
                 @attachment.save
-                @existing_names.each{|f| assert ! File.exists?(f) }
+                @existing_names.each{|f| assert ! File.exist?(f) }
               end
 
               should "delete the files when you call #delete" do
@@ -905,7 +905,7 @@ class AttachmentTest < Test::Unit::TestCase
                 @attachment.expects(:instance_write).with(:file_size, nil)
                 @attachment.expects(:instance_write).with(:updated_at, nil)
                 @attachment.destroy
-                @existing_names.each{|f| assert ! File.exists?(f) }
+                @existing_names.each{|f| assert ! File.exist?(f) }
               end
             end
           end
@@ -1057,12 +1057,12 @@ class AttachmentTest < Test::Unit::TestCase
 
     should "not delete the files from storage when attachment is destroyed" do
       @attachment.destroy
-      assert File.exists?(@path)
+      assert File.exist?(@path)
     end
 
     should "not delete the file when model is destroyed" do
       @dummy.destroy
-      assert File.exists?(@path)
+      assert File.exist?(@path)
     end
   end
 
@@ -1099,12 +1099,12 @@ class AttachmentTest < Test::Unit::TestCase
         @dummy.destroy
       end
 
-      assert File.exists?(@path)
+      assert File.exist?(@path)
     end
 
     should "be deleted when the model is destroyed" do
       @dummy.destroy
-      assert ! File.exists?(@path)
+      assert ! File.exist?(@path)
     end
   end
 

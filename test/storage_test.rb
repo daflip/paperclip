@@ -22,12 +22,12 @@ class StorageTest < Test::Unit::TestCase
 
     should "store the original" do
       @dummy.save
-      assert File.exists?(@dummy.avatar.path)
+      assert File.exist?(@dummy.avatar.path)
     end
 
     should "store the thumbnail" do
       @dummy.save
-      assert File.exists?(@dummy.avatar.path(:thumbnail))
+      assert File.exist?(@dummy.avatar.path(:thumbnail))
     end
 
     should "clean up file objects" do
