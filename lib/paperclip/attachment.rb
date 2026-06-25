@@ -354,25 +354,30 @@ module Paperclip
     # inconsistencies in timing of S3 commands. It's possible that calling
     # #reprocess! will lose data if the files are not kept.
     def reprocess!(*style_args)
-      saved_flags = @options.slice(
-        :only_process,
-        :preserve_files,
-        :check_validity_before_processing
-      )
-      @options[:only_process] = style_args
-      @options[:preserve_files] = true
-      @options[:check_validity_before_processing] = false
+      new_original = TempfileFactory.new.generate(["paperclip-reprocess", original_ext].join)
 
-      begin
-        assign(self)
+      if (old_original = to_file(:original))
+        new_original.binmode
+        new_original.write(old_original.respond_to?(:get) ? old_original.get : old_original.read)
+        new_original.rewind
+
+        @queued_for_write = { original: new_original }
+        instance_write(:updated_at, Time.now)
+        post_process(*style_args)
+
+        old_original.close if old_original.respond_to?(:close)
         save
-        instance.save
-      rescue Errno::EACCES => e
-        warn "#{e} - skipping file."
-        false
-      ensure
-        @options.merge!(saved_flags)
+      else
+        true
       end
+    rescue Errno::EACCES => e
+      warn "#{e} - skipping file."
+      false
+    end
+
+    def original_ext
+      extension = File.extname(original_filename.to_s).downcase.gsub(/[^a-z0-9]/, "")
+      extension.blank? ? "" : ".#{extension}"
     end
 
     # Returns true if a file has been assigned.
