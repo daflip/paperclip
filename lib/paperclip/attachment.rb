@@ -510,24 +510,45 @@ module Paperclip
       instance.errors.none?
     end
 
+    def sorted_styles #:nodoc:
+      return styles unless @options[:cascading_resize]
+
+      original_styles = styles.select { |style_name, _style| style_name == :original }
+      derivative_styles = styles.reject { |style_name, _style| style_name == :original }
+
+      original_styles.merge(
+        derivative_styles.sort_by { |_style_name, style| -style_area(style) }.to_h
+      )
+    end
+
     def post_process_styles(*style_args) #:nodoc:
-      if styles.include?(:original) && process_style?(:original, style_args)
+      if sorted_styles.include?(:original) && process_style?(:original, style_args)
         post_process_style(:original, styles[:original])
       end
-      styles.reject { |name, _style| name == :original }.each do |name, style|
-        post_process_style(name, style) if process_style?(name, style_args)
+
+      previous_file = nil
+      sorted_styles.reject { |name, _style| name == :original }.each do |name, style|
+        next unless process_style?(name, style_args)
+
+        source_file = @options[:cascading_resize] ? previous_file : nil
+        previous_file = post_process_style(name, style, source_file)
       end
     end
 
-    def post_process_style(name, style) #:nodoc:
+    def style_area(style) #:nodoc:
+      width, height = style.geometry.to_s.split("x").map(&:to_i)
+      width * height
+    end
+
+    def post_process_style(name, style, source_file = nil) #:nodoc:
       raise "Style #{name} has no processors defined." if style.processors.blank?
 
       intermediate_files = []
-      original = @queued_for_write[:original]
+      original = source_file || @queued_for_write[:original]
 
       @queued_for_write[name] = style.processors.
                                 inject(original) do |file, processor|
-        file = Paperclip.processor(processor).make(file, style.processor_options, self)
+        file = Paperclip.processor(processor).make(file, style.processor_options.merge(name: name), self)
         intermediate_files << file unless file == @queued_for_write[:original]
         # if we're processing the original, close + unlink the source tempfile
         @queued_for_write[:original].close(true) if name == :original
