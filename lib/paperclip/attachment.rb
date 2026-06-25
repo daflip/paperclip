@@ -356,20 +356,16 @@ module Paperclip
     def reprocess!(*style_args)
       new_original = TempfileFactory.new.generate(["paperclip-reprocess", original_ext].join)
 
-      if (old_original = to_file(:original))
-        new_original.binmode
-        new_original.write(old_original.respond_to?(:get) ? old_original.get : old_original.read)
-        new_original.rewind
+      return true unless exists?(:original)
+      return false if copy_to_local_file(:original, new_original.path) == false
 
-        @queued_for_write = { original: new_original }
-        instance_write(:updated_at, Time.now)
-        post_process(*style_args)
+      new_original.binmode
+      new_original.rewind
 
-        old_original.close if old_original.respond_to?(:close)
-        save
-      else
-        true
-      end
+      @queued_for_write = { original: new_original }
+      instance_write(:updated_at, Time.now)
+      post_process(*style_args)
+      save
     rescue Errno::EACCES => e
       warn "#{e} - skipping file."
       false
