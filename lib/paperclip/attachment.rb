@@ -44,6 +44,12 @@ module Paperclip
                 :options, :interpolator, :source_file_options, :queued_for_delete
     attr_accessor :post_processing
 
+    attr_accessor :vips_image, :vips_transforms
+
+    def transform_commands(**opts)
+      @vips_transforms = opts
+    end
+
     # Creates an Attachment object. +name+ is the name of the attachment,
     # +instance+ is the model object instance it's attached to, and
     # +options+ is the same as the hash passed to +has_attached_file+.
@@ -87,6 +93,8 @@ module Paperclip
       @queued_for_write      = {}
       @errors                = {}
       @dirty                 = false
+      @operation             = :unknown
+      @normalized_styles     = {}
       @interpolator          = options[:interpolator]
       @url_generator         = options[:url_generator].new(self)
       @source_file_options   = options[:source_file_options]
@@ -197,17 +205,26 @@ module Paperclip
       @options[:default_style]
     end
 
-    def styles
-      if @options[:styles].respond_to?(:call) || @normalized_styles.nil?
+    def operation
+      @operation
+    end
+
+    def styles(related_operation = :unknown)
+      @operation = related_operation
+
+      if @options[:styles].respond_to?(:call) || !@normalized_styles.key?(@operation)
         styles = @options[:styles]
         styles = styles.call(self) if styles.respond_to?(:call)
 
-        @normalized_styles = styles.dup
+        @normalized_styles[@operation] = {}
         styles.each_pair do |name, options|
-          @normalized_styles[name.to_sym] = Paperclip::Style.new(name.to_sym, options.dup, self)
+          @normalized_styles[@operation][name.to_sym] = Paperclip::Style.new(name.to_sym, options.dup, self)
         end
+
+        add_dynamic_styles_for(@operation)
       end
-      @normalized_styles
+
+      @normalized_styles[@operation]
     end
 
     def only_process
@@ -510,11 +527,12 @@ module Paperclip
       instance.errors.none?
     end
 
-    def sorted_styles #:nodoc:
-      return styles unless @options[:cascading_resize]
+    def sorted_styles(related_operation = :unknown) #:nodoc:
+      operation_styles = styles(related_operation)
+      return operation_styles unless @options[:cascading_resize]
 
-      original_styles = styles.select { |style_name, _style| style_name == :original }
-      derivative_styles = styles.reject { |style_name, _style| style_name == :original }
+      original_styles = operation_styles.select { |style_name, _style| style_name == :original }
+      derivative_styles = operation_styles.reject { |style_name, _style| style_name == :original }
 
       original_styles.merge(
         derivative_styles.sort_by { |_style_name, style| -style_area(style) }.to_h
@@ -522,12 +540,15 @@ module Paperclip
     end
 
     def post_process_styles(*style_args) #:nodoc:
-      if sorted_styles.include?(:original) && process_style?(:original, style_args)
-        post_process_style(:original, styles[:original])
+      @vips_image = nil
+      write_styles = sorted_styles(:write)
+
+      if write_styles.include?(:original) && process_style?(:original, style_args)
+        post_process_style(:original, write_styles[:original])
       end
 
       previous_file = nil
-      sorted_styles.reject { |name, _style| name == :original }.each do |name, style|
+      write_styles.reject { |name, _style| name == :original }.each do |name, style|
         next unless process_style?(name, style_args)
 
         source_file = @options[:cascading_resize] ? previous_file : nil
@@ -540,6 +561,30 @@ module Paperclip
       width * height
     end
 
+    def add_dynamic_styles_for(related_operation) #:nodoc:
+      return if @options[:dynamic_styles].blank?
+
+      case related_operation
+      when :delete
+        @options[:dynamic_styles].each do |dynamic_style|
+          dynamic_name, _max_width, _max_height, dynamic_geometry = dynamic_style
+          @normalized_styles[related_operation][dynamic_name.to_sym] =
+            Paperclip::Style.new(dynamic_name.to_sym, dynamic_geometry.dup, self)
+        end
+      when :write
+        return if @queued_for_write[:original].nil?
+
+        original_geometry = Geometry.from_file(@queued_for_write[:original])
+        @options[:dynamic_styles].each do |dynamic_style|
+          dynamic_name, max_width, max_height, dynamic_geometry = dynamic_style
+          next unless original_geometry.width > max_width || original_geometry.height > max_height
+
+          @normalized_styles[related_operation][dynamic_name.to_sym] =
+            Paperclip::Style.new(dynamic_name.to_sym, dynamic_geometry.dup, self)
+        end
+      end
+    end
+
     def post_process_style(name, style, source_file = nil) #:nodoc:
       raise "Style #{name} has no processors defined." if style.processors.blank?
 
@@ -548,6 +593,10 @@ module Paperclip
 
       @queued_for_write[name] = style.processors.
                                 inject(original) do |file, processor|
+        if processor == :thumbnail
+          @vips_image = nil if file != @queued_for_write[:original]
+          ensure_vips_image(file)
+        end
         file = Paperclip.processor(processor).make(file, style.processor_options.merge(name: name), self)
         intermediate_files << file unless file == @queued_for_write[:original]
         # if we're processing the original, close + unlink the source tempfile
@@ -565,6 +614,22 @@ module Paperclip
       (@errors[:processing] ||= []) << e.message if @options[:whiny]
     ensure
       unlink_files(intermediate_files)
+    end
+
+    def ensure_vips_image(file) #:nodoc:
+      return @vips_image if @vips_image
+      return unless file.respond_to?(:path)
+
+      vips_options = ImageProcessing::Vips::Processor::Utils.select_valid_loader_options(file.path, dpi: 301)
+      if file.path.match?(/\.pdf\z/i)
+        vips_options[:dpi] = 300
+      elsif file.path.match?(/\.jpe?g\z/i)
+        vips_options[:autorotate] = true
+      end
+
+      @vips_image = ::Vips::Image.new_from_file(file.path, **vips_options)
+      color_profile = @vips_image.interpretation
+      @vips_image = @vips_image.colourspace(:srgb) unless [:rgb, :srgb].include?(color_profile)
     end
 
     def process_style?(style_name, style_args) #:nodoc:
@@ -585,7 +650,7 @@ module Paperclip
       return if !file?
 
       unless @options[:preserve_files]
-        @queued_for_delete += [:original, *styles.keys].uniq.map do |style|
+        @queued_for_delete += [:original, *styles(:delete).keys].uniq.map do |style|
           path(style) if exists?(style)
         end.compact
       end

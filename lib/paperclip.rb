@@ -69,6 +69,7 @@ end
 require "marcel"
 require "logger"
 require "terrapin"
+require "image_processing/vips"
 
 require "paperclip/railtie" if defined?(Rails::Railtie)
 

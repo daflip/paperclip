@@ -19,7 +19,7 @@ module Paperclip
         "%[exif:orientation]" : "1"
       Paperclip.run(
         Paperclip.options[:is_windows] ? "magick identify" : "identify",
-        "-format '%wx%h,#{orientation}' :file", {
+        "-ping -format '%wx%h,#{orientation}' :file", {
           file: "#{path}[0]"
         },
         swallow_stderr: true

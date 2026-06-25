@@ -105,6 +105,18 @@ module Paperclip
       [scale_geometry, crop_geometry]
     end
 
+    def gifsicle_transformation_to(dst, crop = false)
+      if crop
+        ratio = Geometry.new(dst.width / width, dst.height / height)
+        scale_geometry, scale = gifsicle_scaling(dst, ratio)
+        crop_geometry         = gifsicle_cropping(dst, ratio, scale)
+      else
+        scale_geometry = dst.to_s
+      end
+
+      [scale_geometry, crop_geometry]
+    end
+
     # resize to a new geometry
     # @param geometry [String] the Paperclip geometry definition to resize to
     # @example
@@ -142,12 +154,37 @@ module Paperclip
       end
     end
 
+    def gifsicle_scaling(dst, ratio)
+      if ratio.horizontal? || ratio.square?
+        ["%dx%d" % [dst.width, dst.height], ratio.width]
+      else
+        ["%dx%d" % [dst.width, dst.height], ratio.height]
+      end
+    end
+
     def cropping(dst, ratio, scale)
       if ratio.horizontal? || ratio.square?
         "%dx%d+%d+%d" % [dst.width, dst.height, 0, (height * scale - dst.height) / 2]
       else
         "%dx%d+%d+%d" % [dst.width, dst.height, (width * scale - dst.width) / 2, 0]
       end
+    end
+
+    def gifsicle_cropping(_dst, ratio, scale)
+      original_width = width
+      original_height = height
+
+      if ratio.horizontal? || ratio.square?
+        crop_width = (original_width / scale).round
+        crop_height = (height / scale).round
+      else
+        crop_width = (width / scale).round
+        crop_height = (original_height / scale).round
+      end
+
+      source_x = ((original_width - crop_width) / 2).floor
+      source_y = ((original_height - crop_height) / 2).floor
+      "%d,%d+%dx%d" % [source_x, source_y, crop_width, crop_height]
     end
 
     # scale to the requested geometry and preserve the aspect ratio
