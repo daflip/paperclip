@@ -36,7 +36,8 @@ module Paperclip
         validate_media_type:               true,
         adapter_options:                   { hash_digest: Digest::MD5 },
         check_validity_before_processing:  true,
-        return_file_attributes_on_destroy: false
+        return_file_attributes_on_destroy: false,
+        cascading_resize:                  false
       }
     end
 
@@ -74,6 +75,8 @@ module Paperclip
     # +escape_url+ - Perform URI escaping to URLs. Defaults to true
     # +return_file_attributes_on_destroy+ - whether attachment-related attributes should be displayed when
     #                                       destroying a record. Defaults to false.
+    # +cascading_resize+ - process styles largest-to-smallest, using each generated style as the source
+    #                      for the next style. Defaults to false.
     def initialize(name, instance, options = {})
       @name              = name.to_sym
       @name_string       = name.to_s
@@ -511,24 +514,46 @@ module Paperclip
     end
 
     def post_process_styles(*style_args) #:nodoc:
+      source_file = @queued_for_write[:original]
+
       if styles.include?(:original) && process_style?(:original, style_args)
-        post_process_style(:original, styles[:original])
+        post_process_style(:original, styles[:original], source_file)
+        source_file = @queued_for_write[:original]
       end
-      styles.reject { |name, _style| name == :original }.each do |name, style|
-        post_process_style(name, style) if process_style?(name, style_args)
+
+      styles_for_processing(style_args).each do |name, style|
+        processed_file = post_process_style(name, style, source_file)
+        source_file = processed_file if @options[:cascading_resize] && processed_file
       end
     end
 
-    def post_process_style(name, style) #:nodoc:
+    def styles_for_processing(style_args)
+      selected_styles = styles.reject { |name, _style| name == :original || !process_style?(name, style_args) }
+      if @options[:cascading_resize]
+        selected_styles.sort_by { |_name, style| style_size(style).map { |size| -size } }
+      else
+        selected_styles
+      end
+    end
+
+    def style_size(style)
+      geometry = Paperclip::Geometry.parse(style.geometry.to_s)
+      [geometry.larger, geometry.width * geometry.height]
+    rescue NoMethodError, Paperclip::Error
+      [0, 0]
+    end
+
+    def post_process_style(name, style, source_file = @queued_for_write[:original]) #:nodoc:
       raise "Style #{name} has no processors defined." if style.processors.blank?
 
       intermediate_files = []
       original = @queued_for_write[:original]
+      source_file ||= original
 
       @queued_for_write[name] = style.processors.
-                                inject(original) do |file, processor|
+                                inject(source_file) do |file, processor|
         file = Paperclip.processor(processor).make(file, style.processor_options, self)
-        intermediate_files << file unless file == @queued_for_write[:original]
+        intermediate_files << file unless [original, source_file].include?(file)
         # if we're processing the original, close + unlink the source tempfile
         @queued_for_write[:original].close(true) if name == :original
         file
@@ -542,6 +567,7 @@ module Paperclip
     rescue Paperclip::Errors::NotIdentifiedByImageMagickError => e
       log("An error was received while processing: #{e.inspect}")
       (@errors[:processing] ||= []) << e.message if @options[:whiny]
+      nil
     ensure
       unlink_files(intermediate_files)
     end

@@ -501,6 +501,43 @@ describe Paperclip::Attachment do
     end
   end
 
+  context "An attachment with :cascading_resize" do
+    before do
+      class Paperclip::CascadeRecorder < Paperclip::Processor
+        class << self
+          attr_accessor :calls
+        end
+
+        def make
+          self.class.calls << [options[:style], file.path]
+          tempfile = Tempfile.new([options[:style].to_s, ".jpg"])
+          tempfile.write(options[:style].to_s)
+          tempfile.rewind
+          tempfile
+        end
+      end
+
+      Paperclip::CascadeRecorder.calls = []
+      rebuild_model styles: {
+                      thumb: "54x54#",
+                      large: "2000x2000>",
+                      medium: "800x800>"
+                    },
+                    processors: [:cascade_recorder],
+                    cascading_resize: true
+
+      @attachment = Dummy.new.avatar
+      @attachment.assign(StringIO.new("original"))
+    end
+
+    it "processes largest styles first and uses each generated style as the next source" do
+      assert_equal [:large, :medium, :thumb], Paperclip::CascadeRecorder.calls.map(&:first)
+      assert_equal @attachment.queued_for_write[:original].path, Paperclip::CascadeRecorder.calls[0].last
+      assert_equal @attachment.queued_for_write[:large].path, Paperclip::CascadeRecorder.calls[1].last
+      assert_equal @attachment.queued_for_write[:medium].path, Paperclip::CascadeRecorder.calls[2].last
+    end
+  end
+
   context "An attachment with :only_process that is a proc" do
     before do
       rebuild_model styles: {

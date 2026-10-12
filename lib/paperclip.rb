@@ -154,6 +154,8 @@ module Paperclip
     #     has_attached_file :avatar, :styles => { :normal => "100x100#" },
     #                       :default_style => :normal
     #     user.avatar.url # => "/avatars/23/normal_me.png"
+    # * +cascading_resize+: Process styles from largest to smallest and use each
+    #   generated style as the source for the next style. Defaults to false.
     # * +keep_old_files+: Keep the existing attachment files (original + resized) from
     #   being automatically deleted when an attachment is cleared or updated. Defaults to +false+.
     # * +preserve_files+: Keep the existing attachment files in all cases, even if the parent
