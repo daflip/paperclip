@@ -28,6 +28,7 @@ module Paperclip
         source_file_options:               {},
         storage:                           :filesystem,
         styles:                            {},
+        dynamic_styles:                    [],
         url:                               "/system/:class/:attachment/:id_partition/:style/:filename",
         url_generator:                     Paperclip::UrlGenerator,
         use_default_time_zone:             true,
@@ -54,6 +55,7 @@ module Paperclip
     # +url+ - a relative URL of the attachment. This is interpolated using +interpolator+
     # +path+ - where on the filesystem to store the attachment. This is interpolated using +interpolator+
     # +styles+ - a hash of options for processing the attachment. See +has_attached_file+ for the details
+    # +dynamic_styles+ - array of conditional styles: [name, min_width, min_height, style_definition]
     # +only_process+ - style args to be run through the post-processor. This defaults to the empty list (which is
     #                  a special case that indicates all styles should be processed)
     # +default_url+ - a URL for the missing image
@@ -201,17 +203,71 @@ module Paperclip
     end
 
     def styles
-      if @options[:styles].respond_to?(:call) || @normalized_styles.nil?
+      if @options[:styles].respond_to?(:call) || dynamic_styles? || @normalized_styles.nil?
         styles = @options[:styles]
         styles = styles.call(self) if styles.respond_to?(:call)
 
-        @normalized_styles = styles.dup
-        styles.each_pair do |name, options|
-          @normalized_styles[name.to_sym] = Paperclip::Style.new(name.to_sym, options.dup, self)
-        end
+        @normalized_styles = normalize_styles(styles)
+        @normalized_styles.merge!(normalize_styles(dynamic_styles_for_source))
       end
       @normalized_styles
     end
+
+    def normalize_styles(styles)
+      styles.dup.tap do |normalized_styles|
+        styles.each_pair do |name, options|
+          normalized_styles[name.to_sym] = Paperclip::Style.new(name.to_sym, options.dup, self)
+        end
+      end
+    end
+
+    def dynamic_styles?
+      dynamic_styles_option.respond_to?(:any?) && dynamic_styles_option.any?
+    end
+
+    def dynamic_styles_option
+      dynamic_styles = @options[:dynamic_styles]
+      dynamic_styles.respond_to?(:call) ? dynamic_styles.call(self) : dynamic_styles
+    end
+
+    def dynamic_styles_for_source
+      Array(dynamic_styles_option).each_with_object({}) do |definition, dynamic_styles|
+        name, min_width, min_height, style_definition = dynamic_style_definition_parts(definition)
+        next if name.nil? || style_definition.nil?
+        next unless dynamic_style_applies?(min_width, min_height)
+
+        dynamic_styles[name] = style_definition
+      end
+    end
+
+    def dynamic_style_definition_parts(definition)
+      name, min_width, min_height, style_definition = definition
+      [name && name.to_sym, min_width, min_height, style_definition]
+    end
+
+    def dynamic_style_applies?(min_width, min_height)
+      source_geometry = dynamic_style_source_geometry
+      return true unless source_geometry
+
+      width_matches = min_width && min_width.to_f > 0 && source_geometry.width >= min_width.to_f
+      height_matches = min_height && min_height.to_f > 0 && source_geometry.height >= min_height.to_f
+      width_matches || height_matches
+    end
+
+    def dynamic_style_source_geometry
+      source_file = @queued_for_write[:original]
+      return unless source_file
+      return @dynamic_style_source_geometry if @dynamic_style_source_geometry_path == source_file.path
+
+      @dynamic_style_source_geometry_path = source_file.path
+      @dynamic_style_source_geometry = Paperclip::Geometry.from_file(source_file)
+    rescue Paperclip::Error, Terrapin::CommandLineError
+      nil
+    end
+
+    private :normalize_styles, :dynamic_styles?, :dynamic_styles_option,
+            :dynamic_styles_for_source, :dynamic_style_definition_parts,
+            :dynamic_style_applies?, :dynamic_style_source_geometry
 
     def only_process
       only_process = @options[:only_process].dup
@@ -435,6 +491,7 @@ module Paperclip
 
     def assign_attributes
       @queued_for_write[:original] = @file
+      @dynamic_style_source_geometry = @dynamic_style_source_geometry_path = nil
       assign_file_information
       assign_fingerprint { @file.fingerprint }
       assign_timestamps

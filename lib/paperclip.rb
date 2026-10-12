@@ -156,6 +156,9 @@ module Paperclip
     #     user.avatar.url # => "/avatars/23/normal_me.png"
     # * +cascading_resize+: Process styles from largest to smallest and use each
     #   generated style as the source for the next style. Defaults to false.
+    # * +dynamic_styles+: Conditional styles used when the source image is at least
+    #   as wide or as tall as the configured dimensions.
+    #     has_attached_file :avatar, :dynamic_styles => [[:xxl, 1600, 1250, "1600x1250>"]]
     # * +keep_old_files+: Keep the existing attachment files (original + resized) from
     #   being automatically deleted when an attachment is cleared or updated. Defaults to +false+.
     # * +preserve_files+: Keep the existing attachment files in all cases, even if the parent

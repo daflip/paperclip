@@ -538,6 +538,46 @@ describe Paperclip::Attachment do
     end
   end
 
+  context "An attachment with :dynamic_styles" do
+    before do
+      class Paperclip::CascadeRecorder < Paperclip::Processor
+        class << self
+          attr_accessor :calls
+        end
+
+        def make
+          self.class.calls << [options[:style], file.path]
+          tempfile = Tempfile.new([options[:style].to_s, ".jpg"])
+          tempfile.write(options[:style].to_s)
+          tempfile.rewind
+          tempfile
+        end
+      end
+
+      allow(Paperclip::Geometry).to receive(:from_file).and_return(Paperclip::Geometry.new(1400, 1000))
+      Paperclip::CascadeRecorder.calls = []
+      rebuild_model styles: { thumb: "54x54#" },
+                    dynamic_styles: [
+                      [:xxl, 1600, 1250, "1600x1250>"],
+                      [:xl, 1280, 900, "1280x900>"]
+                    ],
+                    processors: [:cascade_recorder],
+                    cascading_resize: true
+
+      @attachment = Dummy.new.avatar
+      @attachment.assign(StringIO.new("original"))
+    end
+
+    it "only processes dynamic styles whose size is met by the source image" do
+      assert_equal [:xl, :thumb], Paperclip::CascadeRecorder.calls.map(&:first)
+    end
+
+    it "includes matching dynamic styles in cascading resize order" do
+      assert_equal @attachment.queued_for_write[:original].path, Paperclip::CascadeRecorder.calls[0].last
+      assert_equal @attachment.queued_for_write[:xl].path, Paperclip::CascadeRecorder.calls[1].last
+    end
+  end
+
   context "An attachment with :only_process that is a proc" do
     before do
       rebuild_model styles: {
