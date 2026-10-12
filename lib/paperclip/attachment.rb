@@ -204,13 +204,15 @@ module Paperclip
 
     def styles
       if @options[:styles].respond_to?(:call) || dynamic_styles? || @normalized_styles.nil?
-        styles = @options[:styles]
-        styles = styles.call(self) if styles.respond_to?(:call)
-
-        @normalized_styles = normalize_styles(styles)
+        @normalized_styles = normalize_styles(styles_definition)
         @normalized_styles.merge!(normalize_styles(dynamic_styles_for_source))
       end
       @normalized_styles
+    end
+
+    def styles_definition
+      styles = @options[:styles]
+      styles.respond_to?(:call) ? styles.call(self) : styles
     end
 
     def normalize_styles(styles)
@@ -219,6 +221,10 @@ module Paperclip
           normalized_styles[name.to_sym] = Paperclip::Style.new(name.to_sym, options.dup, self)
         end
       end
+    end
+
+    def static_styles
+      normalize_styles(styles_definition)
     end
 
     def dynamic_styles?
@@ -234,9 +240,13 @@ module Paperclip
       Array(dynamic_styles_option).each_with_object({}) do |definition, dynamic_styles|
         name, min_width, min_height, style_definition = dynamic_style_definition_parts(definition)
         next if name.nil? || style_definition.nil?
-        next unless dynamic_style_applies?(min_width, min_height)
 
-        dynamic_styles[name] = style_definition
+        if dynamic_style_applies?(min_width, min_height)
+          log("including dynamic style #{name} for #{dynamic_style_source_geometry.inspect}")
+          dynamic_styles[name] = style_definition
+        else
+          log("skipping dynamic style #{name} for #{dynamic_style_source_geometry.inspect}")
+        end
       end
     end
 
@@ -265,7 +275,8 @@ module Paperclip
       nil
     end
 
-    private :normalize_styles, :dynamic_styles?, :dynamic_styles_option,
+    private :styles_definition, :normalize_styles, :static_styles,
+            :dynamic_styles?, :dynamic_styles_option,
             :dynamic_styles_for_source, :dynamic_style_definition_parts,
             :dynamic_style_applies?, :dynamic_style_source_geometry
 
@@ -573,9 +584,11 @@ module Paperclip
     def post_process_styles(*style_args) #:nodoc:
       source_file = @queued_for_write[:original]
 
-      if styles.include?(:original) && process_style?(:original, style_args)
-        post_process_style(:original, styles[:original], source_file)
+      defined_styles = static_styles
+      if defined_styles.include?(:original) && process_style?(:original, style_args)
+        post_process_style(:original, defined_styles[:original], source_file)
         source_file = @queued_for_write[:original]
+        @normalized_styles = nil if dynamic_styles?
       end
 
       styles_for_processing(style_args).each do |name, style|
