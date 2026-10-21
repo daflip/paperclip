@@ -241,12 +241,7 @@ module Paperclip
         name, min_width, min_height, style_definition = dynamic_style_definition_parts(definition)
         next if name.nil? || style_definition.nil?
 
-        if dynamic_style_applies?(min_width, min_height)
-          log("including dynamic style #{name} for #{dynamic_style_source_geometry.inspect}")
-          dynamic_styles[name] = style_definition
-        else
-          log("skipping dynamic style #{name} for #{dynamic_style_source_geometry.inspect}")
-        end
+        dynamic_styles[name] = style_definition if dynamic_style_applies?(min_width, min_height)
       end
     end
 
