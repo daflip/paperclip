@@ -18,6 +18,16 @@ describe Paperclip::Attachment do
     expect(dummy.avatar).to be_present
   end
 
+  it "stores transform commands for processors" do
+    rebuild_class
+    dummy = Dummy.new
+
+    dummy.avatar.transform_commands(thumb: { rotate: [90] })
+
+    expect(dummy.avatar.transform_commands).to eq(thumb: { rotate: [90] })
+    expect(dummy.avatar.vips_transforms).to eq(thumb: { rotate: [90] })
+  end
+
   it "processes :original style first" do
     file = File.new(fixture_file("50x50.png"), "rb")
     rebuild_class styles: { small: "100x>", original: "42x42#" }

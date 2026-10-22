@@ -104,8 +104,42 @@ module Paperclip
       trans << "-auto-orient" if auto_orient
       trans << "-resize" << %["#{scale}"] unless scale.nil? || scale.empty?
       trans << "-crop" << %["#{crop}"] << "+repage" if crop
+      trans.concat image_magick_transformation_commands(@options[:name] || @options[:style] || :original)
       trans << '-layers "optimize"' if animated?
       trans
+    end
+
+    def thumbnail_transformations(style_name)
+      return {} unless @attachment&.respond_to?(:transform_commands)
+
+      transformations = @attachment.transform_commands || {}
+      transformations[style_name.to_sym] || transformations[:all] || {}
+    end
+
+    def image_magick_transformation_commands(style_name)
+      thumbnail_transformations(style_name).flat_map do |command, params|
+        next [] if params.nil? || params == false
+
+        switch = image_magick_switch(command)
+        params = [] if params == true
+        [switch, *Array(params).map { |param| image_magick_argument(param) }]
+      end
+    end
+
+    def image_magick_switch(command)
+      command = command.to_s.tr("_", "-")
+      command.start_with?("-", "+") ? command : "-#{command}"
+    end
+
+    def image_magick_argument(argument)
+      case argument
+      when String
+        %["#{argument.gsub('"', '\\"')}"]
+      when Symbol
+        argument.to_s
+      else
+        argument.to_s
+      end
     end
 
     protected

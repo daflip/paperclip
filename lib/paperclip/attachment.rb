@@ -44,7 +44,21 @@ module Paperclip
 
     attr_reader :name, :instance, :default_style, :convert_options, :queued_for_write, :whiny,
                 :options, :interpolator, :source_file_options, :queued_for_delete
-    attr_accessor :post_processing
+    attr_accessor :post_processing, :vips_image
+
+    def transform_commands(**opts)
+      return @transform_commands if opts.empty?
+
+      @transform_commands = opts
+    end
+
+    def vips_transforms
+      @transform_commands
+    end
+
+    def vips_transforms=(transforms)
+      @transform_commands = transforms
+    end
 
     # Creates an Attachment object. +name+ is the name of the attachment,
     # +instance+ is the model object instance it's attached to, and

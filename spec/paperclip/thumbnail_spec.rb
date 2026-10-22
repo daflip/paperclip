@@ -262,6 +262,41 @@ describe Paperclip::Thumbnail do
       end
     end
 
+    context "passing transform commands from the attachment" do
+      it "appends style-specific ImageMagick switches to the transformation command" do
+        attachment = double(
+          "attachment",
+          transform_commands: { thumb: { rotate: [90], strip: true, background: ["white"] } }
+        )
+        thumb = Paperclip::Thumbnail.new(@file, { geometry: "50x50", style: :thumb }, attachment)
+
+        transformation_command = thumb.transformation_command
+
+        assert transformation_command.include?("-rotate"),
+               %{expected #{transformation_command.inspect} to include '-rotate'}
+        assert transformation_command.include?("90"),
+               %{expected #{transformation_command.inspect} to include '90'}
+        assert transformation_command.include?("-strip"),
+               %{expected #{transformation_command.inspect} to include '-strip'}
+        assert transformation_command.include?("-background"),
+               %{expected #{transformation_command.inspect} to include '-background'}
+        assert transformation_command.include?('"white"'),
+               %{expected #{transformation_command.inspect} to include '"white"'}
+      end
+
+      it "falls back to commands defined for all styles" do
+        attachment = double("attachment", transform_commands: { all: { colorspace: [:Gray] } })
+        thumb = Paperclip::Thumbnail.new(@file, { geometry: "50x50", style: :thumb }, attachment)
+
+        transformation_command = thumb.transformation_command
+
+        assert transformation_command.include?("-colorspace"),
+               %{expected #{transformation_command.inspect} to include '-colorspace'}
+        assert transformation_command.include?("Gray"),
+               %{expected #{transformation_command.inspect} to include 'Gray'}
+      end
+    end
+
     context "passing a custom geometry string parser" do
       after do
         Object.send(:remove_const, :GeoParser) if Object.const_defined?(:GeoParser)
