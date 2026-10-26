@@ -127,8 +127,17 @@ module Paperclip
       ensure_required_validations!
 
       if @file.assignment?
-        with_deleting_for_replacement(!@file.nil? && file?) do
-          clear(*only_process)
+        replacing_existing_file = !@file.nil? && file?
+
+        with_deleting_for_replacement(replacing_existing_file) do
+          if replacing_existing_file
+            # When replacing an existing attachment, delete all styles for the
+            # old file. Limiting this to only_process can orphan styles that
+            # were generated outside the current minimum/only_process set.
+            clear
+          else
+            clear(*only_process)
+          end
         end
 
         if @file.nil?
