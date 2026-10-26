@@ -217,6 +217,8 @@ module Paperclip
     end
 
     def styles
+      return @styles_for_path_interpolation if @styles_for_path_interpolation
+
       if @options[:styles].respond_to?(:call) || dynamic_styles? || @normalized_styles.nil?
         @normalized_styles = normalize_styles(styles_definition)
         @normalized_styles.merge!(normalize_styles(dynamic_styles_for_source))
@@ -251,12 +253,36 @@ module Paperclip
     end
 
     def dynamic_styles_for_source
-      Array(dynamic_styles_option).each_with_object({}) do |definition, dynamic_styles|
+      dynamic_style_definitions.each_with_object({}) do |(name, min_width, min_height, style_definition), dynamic_styles|
+        dynamic_styles[name] = style_definition if dynamic_style_applies?(min_width, min_height)
+      end
+    end
+
+    def dynamic_style_definitions
+      Array(dynamic_styles_option).each_with_object([]) do |definition, dynamic_styles|
         name, min_width, min_height, style_definition = dynamic_style_definition_parts(definition)
         next if name.nil? || style_definition.nil?
 
-        dynamic_styles[name] = style_definition if dynamic_style_applies?(min_width, min_height)
+        dynamic_styles << [name, min_width, min_height, style_definition]
       end
+    end
+
+    def all_dynamic_styles
+      dynamic_style_definitions.each_with_object({}) do |(name, _min_width, _min_height, style_definition), dynamic_styles|
+        dynamic_styles[name] = style_definition
+      end
+    end
+
+    def styles_for_delete
+      static_styles.merge(normalize_styles(all_dynamic_styles))
+    end
+
+    def with_styles_for_path_interpolation(styles)
+      previous_styles = @styles_for_path_interpolation
+      @styles_for_path_interpolation = styles
+      yield
+    ensure
+      @styles_for_path_interpolation = previous_styles
     end
 
     def dynamic_style_definition_parts(definition)
@@ -286,7 +312,10 @@ module Paperclip
 
     private :styles_definition, :normalize_styles, :static_styles,
             :dynamic_styles?, :dynamic_styles_option,
-            :dynamic_styles_for_source, :dynamic_style_definition_parts,
+            :dynamic_styles_for_source, :dynamic_style_definitions,
+            :all_dynamic_styles, :styles_for_delete,
+            :with_styles_for_path_interpolation,
+            :dynamic_style_definition_parts,
             :dynamic_style_applies?, :dynamic_style_source_geometry
 
     def only_process
@@ -661,18 +690,23 @@ module Paperclip
     end
 
     def queue_some_for_delete(*styles)
-      @queued_for_delete += styles.uniq.map do |style|
-        path(style) if exists?(style)
-      end.compact
+      with_styles_for_path_interpolation(styles_for_delete) do
+        @queued_for_delete += styles.uniq.map do |style|
+          path(style) if exists?(style)
+        end.compact
+      end
     end
 
     def queue_all_for_delete #:nodoc:
       return if !file?
 
       unless @options[:preserve_files]
-        @queued_for_delete += [:original, *styles.keys].uniq.map do |style|
-          path(style) if exists?(style)
-        end.compact
+        delete_styles = styles_for_delete
+        with_styles_for_path_interpolation(delete_styles) do
+          @queued_for_delete += [:original, *delete_styles.keys].uniq.map do |style|
+            path(style) if exists?(style)
+          end.compact
+        end
       end
 
       return if show_attrs_and_destroy_callback_triggered?

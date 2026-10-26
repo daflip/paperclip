@@ -64,6 +64,25 @@ describe Paperclip::Attachment do
     expect(dummy.avatar.path(:original)).to exist
   end
 
+  it "deletes dynamic styles after the source file is no longer queued" do
+    file = File.new(fixture_file("5k.png"), "rb")
+    rebuild_class dynamic_styles: [[:dynamic, 1, 1, ["100x100", :jpg]]]
+
+    dummy = Dummy.create!
+    dummy.avatar = file
+    dynamic_path = dummy.avatar.path(:dynamic)
+    dummy.save
+
+    assert_file_exists(dynamic_path)
+
+    dummy.avatar = nil
+    dummy.save
+
+    assert_file_not_exists(dynamic_path)
+  ensure
+    file.close if file
+  end
+
   it "reprocess works with virtual content_type attribute" do
     rebuild_class styles: { small: "100x>" }
     modify_table { |t| t.remove :avatar_content_type }
