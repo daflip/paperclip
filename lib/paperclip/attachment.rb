@@ -412,6 +412,16 @@ module Paperclip
       end
     end
 
+    # Queues explicit style paths for deletion without checking whether they
+    # currently exist. Useful when the caller knows the interpolated paths to
+    # remove, but the current styles list is intentionally limited.
+    def queue_delete_for_styles(*style_names)
+      @queued_for_delete += style_names.flatten.compact.uniq.map do |style_name|
+        path(style_name)
+      end
+    end
+    alias queue_delete_for_style queue_delete_for_styles
+
     # Destroys the attachment. Has the same effect as previously assigning
     # nil to the attachment *and saving*. This is permanent. If you wish to
     # wipe out the existing attachment but not save, use #clear.
