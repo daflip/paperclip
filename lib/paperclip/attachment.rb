@@ -127,7 +127,9 @@ module Paperclip
       ensure_required_validations!
 
       if @file.assignment?
-        clear(*only_process)
+        with_deleting_for_replacement(!@file.nil? && file?) do
+          clear(*only_process)
+        end
 
         if @file.nil?
           nil
@@ -226,6 +228,18 @@ module Paperclip
       @normalized_styles
     end
 
+    def deleting?
+      @style_context == :delete
+    end
+
+    def writing?
+      @style_context == :write
+    end
+
+    def replacing?
+      deleting? && @deleting_for_replacement
+    end
+
     def styles_definition
       styles = @options[:styles]
       styles.respond_to?(:call) ? styles.call(self) : styles
@@ -240,7 +254,9 @@ module Paperclip
     end
 
     def static_styles
-      normalize_styles(styles_definition)
+      with_style_context(:write) do
+        normalize_styles(styles_definition)
+      end
     end
 
     def dynamic_styles?
@@ -274,7 +290,25 @@ module Paperclip
     end
 
     def styles_for_delete
-      static_styles.merge(normalize_styles(all_dynamic_styles))
+      with_style_context(:delete) do
+        normalize_styles(styles_definition).merge(normalize_styles(all_dynamic_styles))
+      end
+    end
+
+    def with_style_context(context)
+      previous_context = @style_context
+      @style_context = context
+      yield
+    ensure
+      @style_context = previous_context
+    end
+
+    def with_deleting_for_replacement(value)
+      previous_value = @deleting_for_replacement
+      @deleting_for_replacement = value
+      yield
+    ensure
+      @deleting_for_replacement = previous_value
     end
 
     def with_styles_for_path_interpolation(styles)
@@ -314,6 +348,7 @@ module Paperclip
             :dynamic_styles?, :dynamic_styles_option,
             :dynamic_styles_for_source, :dynamic_style_definitions,
             :all_dynamic_styles, :styles_for_delete,
+            :with_style_context, :with_deleting_for_replacement,
             :with_styles_for_path_interpolation,
             :dynamic_style_definition_parts,
             :dynamic_style_applies?, :dynamic_style_source_geometry
@@ -350,7 +385,7 @@ module Paperclip
       flush_deletes unless @options[:keep_old_files]
       process = only_process
       @queued_for_write.except!(:original) if process.any? && !process.include?(:original)
-      flush_writes
+      flush_writes_with_resolved_styles
       @dirty = false
       true
     end
@@ -630,14 +665,17 @@ module Paperclip
         @normalized_styles = nil if dynamic_styles?
       end
 
-      styles_for_processing(style_args).each do |name, style|
+      defined_styles.merge!(normalize_styles(dynamic_styles_for_source))
+      @styles_for_write = defined_styles
+
+      styles_for_processing(defined_styles, style_args).each do |name, style|
         processed_file = post_process_style(name, style, source_file)
         source_file = processed_file if @options[:cascading_resize] && processed_file
       end
     end
 
-    def styles_for_processing(style_args)
-      selected_styles = styles.reject { |name, _style| name == :original || !process_style?(name, style_args) }
+    def styles_for_processing(defined_styles, style_args)
+      selected_styles = defined_styles.reject { |name, _style| name == :original || !process_style?(name, style_args) }
       if @options[:cascading_resize]
         selected_styles.sort_by { |_name, style| style_size(style).map { |size| -size } }
       else
@@ -688,6 +726,22 @@ module Paperclip
     def interpolate(pattern, style_name = default_style) #:nodoc:
       interpolator.interpolate(pattern, self, style_name)
     end
+
+    def flush_writes_with_resolved_styles
+      write_styles = @styles_for_write
+      if write_styles.nil? && @queued_for_write.any? && (@options[:styles].respond_to?(:call) || dynamic_styles?)
+        write_styles = static_styles.merge(normalize_styles(dynamic_styles_for_source))
+      end
+
+      if write_styles
+        with_styles_for_path_interpolation(write_styles) { flush_writes }
+      else
+        flush_writes
+      end
+    ensure
+      @styles_for_write = nil
+    end
+    private :flush_writes_with_resolved_styles
 
     def queue_some_for_delete(*styles)
       with_styles_for_path_interpolation(styles_for_delete) do

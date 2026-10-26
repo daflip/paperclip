@@ -607,6 +607,41 @@ describe Paperclip::Attachment do
     it "has the correct geometry" do
       assert_equal "50x50#", @attachment.styles[:thumb][:geometry]
     end
+
+    it "resolves styles once for replacement deletes and once for replacement writes" do
+      style_calls = []
+      file = File.new(fixture_file("50x50.png"), "rb")
+      replacement = nil
+
+      rebuild_model styles: lambda { |attachment|
+        if attachment.deleting?
+          style_calls << :delete
+          expect(attachment).to be_replacing
+          { thumb: "50x50#", large: "400x400" }
+        else
+          style_calls << (attachment.writing? ? :write : :read)
+          attachment.instance.other == "thumb" ? { thumb: "50x50#" } : { large: "400x400" }
+        end
+      }
+
+      dummy = Dummy.new(other: "thumb")
+      dummy.avatar = file
+      dummy.save!
+      thumb_path = dummy.avatar.path(:thumb)
+      assert_file_exists(thumb_path)
+
+      style_calls.clear
+      dummy.other = "large"
+      replacement = File.new(fixture_file("50x50.png"), "rb")
+      dummy.avatar = replacement
+      dummy.save!
+
+      assert_equal [:delete, :write], style_calls
+      assert_file_not_exists(thumb_path)
+    ensure
+      file.close if file
+      replacement.close if replacement
+    end
   end
 
   context "An attachment with conditional :styles that is a proc" do
