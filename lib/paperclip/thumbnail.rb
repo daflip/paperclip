@@ -60,6 +60,21 @@ module Paperclip
       !@convert_options.nil? && !@convert_options.empty?
     end
 
+    # Returns crop coordinates supplied by the attachment's model, when that model
+    # supports Paperclip's legacy explicit-crop API.
+    def cropping?
+      return false unless @attachment
+
+      target = @attachment.instance
+      return false unless target.respond_to?(:cropping?)
+
+      if target.cropping?(processor_options_with_name)
+        [target.crop_x.to_i, target.crop_y.to_i, target.crop_w.to_i, target.crop_h.to_i]
+      else
+        false
+      end
+    end
+
     # Performs the conversion of the +file+ into a thumbnail. Returns the Tempfile
     # that contains the new image.
     def make
@@ -99,11 +114,17 @@ module Paperclip
     # into the thumbnail.
     def transformation_command
       scale, crop = @current_geometry.transformation_to(@target_geometry, crop?)
+      crop_coords = cropping?
       trans = []
       trans << "-coalesce" if animated?
       trans << "-auto-orient" if auto_orient
-      trans << "-resize" << %["#{scale}"] unless scale.nil? || scale.empty?
-      trans << "-crop" << %["#{crop}"] << "+repage" if crop
+      if crop_coords
+        trans.concat explicit_crop_command(crop_coords)
+        trans << "-resize" << %["#{explicit_crop_resize_geometry}"] unless scale.nil? || scale.empty?
+      else
+        trans << "-resize" << %["#{scale}"] unless scale.nil? || scale.empty?
+        trans << "-crop" << %["#{crop}"] << "+repage" if crop
+      end
       trans.concat image_magick_transformation_commands(@options[:name] || @options[:style] || :original)
       trans << '-layers "optimize"' if animated?
       trans
@@ -140,6 +161,21 @@ module Paperclip
       else
         argument.to_s
       end
+    end
+
+    def processor_options_with_name
+      return @options if @options[:name] || !@options.key?(:style)
+
+      @options.merge(name: @options[:style])
+    end
+
+    def explicit_crop_command(crop_coords)
+      crop_x, crop_y, crop_w, crop_h = crop_coords
+      ["-crop", %["#{crop_w}x#{crop_h}+#{crop_x}+#{crop_y}"], "+repage"]
+    end
+
+    def explicit_crop_resize_geometry
+      @target_geometry.to_s.sub(/[#!<>@^]\z/, "")
     end
 
     protected

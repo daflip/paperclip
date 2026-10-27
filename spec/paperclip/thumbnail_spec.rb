@@ -97,6 +97,29 @@ describe Paperclip::Thumbnail do
       end
     end
 
+    context "being thumbnailed with explicit crop coordinates from the attachment instance" do
+      before do
+        target = double(
+          "target",
+          crop_x: "10",
+          crop_y: "20",
+          crop_w: "200",
+          crop_h: "100"
+        )
+        allow(target).to receive(:cropping?) { |processor_options| processor_options[:name] == :thumb }
+        attachment = double("attachment", instance: target)
+        @thumb = Paperclip::Thumbnail.new(@file, { geometry: "100x50#", style: :thumb }, attachment)
+      end
+
+      it "crops to the supplied rectangle before resizing to the target geometry" do
+        expect(@thumb).to receive(:convert) do |*arg|
+          arg[0] == ':source -auto-orient -crop "200x100+10+20" +repage -resize "100x50" :dest' &&
+            arg[1][:source] == "#{File.expand_path(@thumb.file.path)}[0]"
+        end
+        @thumb.make
+      end
+    end
+
     it "crops a EXIF-rotated image properly" do
       file = File.new(fixture_file("rotated.jpg"))
       thumb = Paperclip::Thumbnail.new(file, geometry: "50x50#")
