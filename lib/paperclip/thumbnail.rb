@@ -134,7 +134,7 @@ module Paperclip
       return {} unless @attachment&.respond_to?(:transform_commands)
 
       transformations = @attachment.transform_commands || {}
-      transformations[style_name.to_sym] || transformations[:all] || {}
+      (transformations[:all] || {}).merge(transformations[style_name.to_sym] || {})
     end
 
     def image_magick_transformation_commands(style_name)
