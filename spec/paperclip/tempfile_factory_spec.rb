@@ -8,6 +8,11 @@ describe Paperclip::TempfileFactory do
     assert File.extname(file.path), "png"
   end
 
+  it "generates tempfiles with a RackMultipart prefix" do
+    file = subject.generate("omg.png")
+    assert File.basename(file.path).start_with?("RackMultipart-")
+  end
+
   it "is able to generate a tempfile with the right name with a tilde at the beginning" do
     file = subject.generate("~omg.png")
     assert File.extname(file.path), "png"
