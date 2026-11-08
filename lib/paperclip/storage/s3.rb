@@ -372,7 +372,7 @@ module Paperclip
           begin
             log("saving #{path(style)}")
             write_options = {
-              content_type: file.content_type,
+              content_type: upload_content_type(file),
             }
 
             if @s3_acl_enabled
@@ -451,6 +451,14 @@ module Paperclip
       end
 
       private
+
+      def upload_content_type(file)
+        if file.respond_to?(:content_type)
+          file.content_type
+        else
+          content_type
+        end
+      end
 
       def find_credentials(creds)
         case creds

@@ -114,7 +114,7 @@ module Paperclip
               body: file,
               key: path(style),
               public: fog_public(style),
-              content_type: file.content_type
+              content_type: upload_content_type(file)
             )
             attributes.merge!(@options[:fog_options]) if @options[:fog_options]
             directory.files.create(attributes)
@@ -190,6 +190,14 @@ module Paperclip
       end
 
       private
+
+      def upload_content_type(file)
+        if file.respond_to?(:content_type)
+          file.content_type
+        else
+          content_type
+        end
+      end
 
       def convert_time(time)
         time = Time.now + time if time.is_a?(Integer)
