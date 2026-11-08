@@ -242,6 +242,14 @@ describe Paperclip::Storage::Fog do
         @dummy.save
       end
 
+      it "falls back to the attachment content type when a queued tempfile cannot provide one" do
+        file = double("tempfile")
+        allow(file).to receive(:respond_to?).with(:content_type).and_return(true)
+        allow(file).to receive(:content_type).and_raise(NoMethodError.new("undefined method `content_type'", :content_type))
+
+        assert_equal "image/png", @dummy.avatar.send(:upload_content_type, file)
+      end
+
       context "without a bucket" do
         before do
           @connection.directories.get(@fog_directory).destroy

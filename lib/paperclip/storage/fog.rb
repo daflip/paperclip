@@ -193,7 +193,13 @@ module Paperclip
 
       def upload_content_type(file)
         if file.respond_to?(:content_type)
-          file.content_type
+          begin
+            file.content_type
+          rescue NoMethodError => e
+            raise unless e.name == :content_type
+
+            content_type
+          end
         else
           content_type
         end
